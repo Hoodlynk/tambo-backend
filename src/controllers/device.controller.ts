@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import * as deviceService from '../services/device.service';
 import * as episodeService from '../services/episode.service';
+import * as evidenceService from '../services/evidence.service';
 import { authContext } from '../middlewares/auth.middleware';
 import type {
   DeviceInput,
@@ -25,6 +26,13 @@ export const get = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params as { id: string };
   const device = await deviceService.getOwned(authContext(req).userId, id);
   res.status(200).json({ device: device.toJSON() });
+};
+
+export const activity = async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params as { id: string };
+  const device = await deviceService.getOwned(authContext(req).userId, id);
+  const report = await evidenceService.unlockActivity(device);
+  res.status(200).json({ activity: report });
 };
 
 export const update = async (req: Request, res: Response): Promise<void> => {

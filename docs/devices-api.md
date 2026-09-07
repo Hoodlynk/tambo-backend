@@ -28,6 +28,27 @@ theft episode is open — resolve first.
 ### POST /devices/:id/token 🔒 → `{ ingestToken }` (rotates; old token dies instantly)
 ### DELETE /devices/:id/token 🔒 → 204 (revokes; device cannot upload until re-enrolled)
 
+### GET /devices/:id/activity 🔒
+The owner's failed-unlock report — "has anyone been trying my PIN?" Surfaces
+attempts even **below** the threshold, which are otherwise invisible until an
+episode opens. Counts by SERVER receipt time, so a lying device clock cannot
+skew it.
+
+```json
+{
+  "activity": {
+    "inWindow": 2, "threshold": 3, "toThreshold": 1,
+    "windowMinutes": 10, "lastAttemptAt": "2026-09-07T18:31:02.114Z",
+    "recent": [ { "capturedAt": "...", "receivedAt": "..." } ]
+  }
+}
+```
+
+The *detection* of a wrong unlock happens on the phone (Android device-admin
+`onPasswordFailed`); the device uploads `UNLOCK_FAILED` evidence, and this
+endpoint plus the threshold auto-episode + first-alert (F-B) are the reporting
+half.
+
 ## Theft episodes
 
 One episode = one theft incident; all evidence and the eventual report group

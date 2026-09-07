@@ -26,6 +26,13 @@ router.get(
   validate({ params: deviceIdSchema }),
   asyncHandler(deviceController.get),
 );
+
+// owner-facing failed-unlock report ("has anyone been trying my PIN?")
+router.get(
+  '/:id/activity',
+  validate({ params: deviceIdSchema }),
+  asyncHandler(deviceController.activity),
+);
 router.patch(
   '/:id',
   validate({ params: deviceIdSchema, body: deviceUpdateSchema }),

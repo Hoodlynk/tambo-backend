@@ -253,5 +253,56 @@ export const listForEpisode = (
 export const countForDevice = (deviceId: Types.ObjectId): Promise<number> =>
   EvidenceEnvelope.countDocuments({ device: deviceId }).exec();
 
+export interface UnlockAttemptReport {
+  /** Failed unlocks in the threshold-counting window (server receipt time). */
+  inWindow: number;
+  /** How many more before an episode auto-opens (0 once it would). */
+  toThreshold: number;
+  threshold: number;
+  windowMinutes: number;
+  lastAttemptAt: string | null;
+  /** Most recent failed attempts, newest first (capped). */
+  recent: { capturedAt: string; receivedAt: string }[];
+}
+
+/**
+ * The owner's "has anyone been trying my PIN?" report. Reads UNLOCK_FAILED
+ * evidence by SERVER receipt time (the same authority the threshold uses, so a
+ * lying device clock cannot skew what the owner sees). Surfaces below-threshold
+ * activity that would otherwise be invisible until an episode opens.
+ */
+export const unlockActivity = async (
+  device: IDevice,
+  limit = 20,
+): Promise<UnlockAttemptReport> => {
+  const windowStart = new Date(
+    Date.now() - config.evidence.thresholdWindowMinutes * 60 * 1000,
+  );
+
+  const [inWindow, recent] = await Promise.all([
+    EvidenceEnvelope.countDocuments({
+      device: device._id,
+      type: 'UNLOCK_FAILED',
+      receivedAt: { $gte: windowStart },
+    }),
+    EvidenceEnvelope.find({ device: device._id, type: 'UNLOCK_FAILED' })
+      .sort({ receivedAt: -1 })
+      .limit(limit)
+      .select('capturedAt receivedAt'),
+  ]);
+
+  return {
+    inWindow,
+    toThreshold: Math.max(0, device.failedUnlockThreshold - inWindow),
+    threshold: device.failedUnlockThreshold,
+    windowMinutes: config.evidence.thresholdWindowMinutes,
+    lastAttemptAt: recent[0]?.receivedAt.toISOString() ?? null,
+    recent: recent.map((envelope) => ({
+      capturedAt: envelope.capturedAt.toISOString(),
+      receivedAt: envelope.receivedAt.toISOString(),
+    })),
+  };
+};
+
 // re-exported so server.ts's retention interval has one import site
 export { sweepExpiredMedia } from './storage/media.storage';
