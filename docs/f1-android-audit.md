@@ -127,7 +127,18 @@ Notes:
   broadcast doesn't say. Send `"method": "unknown"` or omit it; the server
   treats the payload as opaque (contract §2).
 - **Do not** count toward any threshold on the device (contract §4). The
-  local `attemptNo` is narrative color for the pack, nothing more.
+  local `attemptNo` is narrative color for the pack, nothing more. If you
+  want it to survive reboots and match the lockscreen's own count, replace
+  the local counter with
+  `DevicePolicyManager.getCurrentFailedPasswordAttempts()` — it works once
+  this admin is active with `<watch-login/>`, and it resets on successful
+  unlock by itself.
+- **Biometrics are invisible, by design.** `onPasswordFailed` (and
+  `getCurrentFailedPasswordAttempts`) cover PIN / password / pattern only.
+  Failed fingerprint or face attempts never reach device admin. The saving
+  grace: after ~5 biometric failures Android forces fallback to the
+  credential, and *those* failures are visible. Set product expectations
+  accordingly and never market biometric-attempt detection.
 - The system starts the app **process** to deliver this broadcast even if the
   app was never opened since boot — that is why detection needs no boot
   receiver and no foreground service.
@@ -544,9 +555,100 @@ F3 (trail after an episode opens). So:
   it records *the owner's* movements on every unlock, which is a privacy
   cost with no theft-evidence benefit (the DPIA would have to defend it).
 
+### 7.1 If product wants "location at the failed attempt" anyway
+
+The clean design is **escalation, not always-on**: no location at all until
+the server says an episode is open, then a trail.
+
+1. A failed attempt fires `onPasswordFailed` → envelope queued → upload.
+2. The upload response carries `episodeOpened: true` / `episodeId`
+   (contract §2) — **that** is the trigger to start capturing location, as
+   `TRAIL_POINT` envelopes, not as fields on `UNLOCK_FAILED` (whose payload
+   the server treats as opaque and the pack renders as narrative anyway).
+3. Capture with the Fused provider (`play-services-location`,
+   `FusedLocationProviderClient.getCurrentLocation(PRIORITY_HIGH_ACCURACY, …)`
+   with a `CancellationToken` + timeout), never `getLastKnownLocation` —
+   inside either an expedited WorkManager job (short bursts) or, for a live
+   trail, a foreground service declared with
+   `android:foregroundServiceType="location"` plus the
+   `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_LOCATION` permissions
+   (mandatory on Android 14+). A visible notification during an active
+   theft episode is acceptable — the thief already knows the phone is on.
+4. Permissions are a two-step ladder on Android 10+: `ACCESS_FINE_LOCATION`
+   granted in-foreground first, **then** a separate
+   `ACCESS_BACKGROUND_LOCATION` request, which on Android 11+ the system
+   redirects to a Settings page ("Allow all the time"). Both must be asked
+   during owner onboarding — after a theft it is too late to ask anything.
+
+Grabbing a one-shot fix directly inside `onPasswordFailed` is tempting but
+wrong three ways: the receiver has a ~10s main-thread budget while a cold
+GPS fix takes longer; without the background grant the call just fails
+silently (today's F3 bug); and pre-episode location capture is exactly the
+kind of continuous tracking the DPIA cannot justify.
+
 ---
 
-## 8. Order of work
+## 8. Boot / auto-start — what is actually needed (finding 7, deep-dive)
+
+Today the app has **no** `RECEIVE_BOOT_COMPLETED` permission, no boot
+receiver, no `<service>` of any kind, no `HeadlessJsTaskService`, and no
+background-task packages in `package.json` — nothing runs until the owner
+taps the icon. What to do about that is subtler than "add a boot receiver":
+
+- **Detection needs nothing.** A manifest-registered `DeviceAdminReceiver`
+  is woken by the system for each callback, cold-starting the app process
+  if needed, including after a reboot the app has never run in. (The one
+  real gap: attempts made *during* Direct Boot, before the very first
+  unlock after restart, are not deliverable to a normal app — accept it.)
+- **Upload needs WorkManager, not a boot receiver.** WorkManager persists
+  its queue and re-schedules pending jobs after reboot through its own
+  internal boot receiver — adopting it (§5.3) *is* the auto-start story
+  for queued evidence.
+- **A tiny boot receiver is still worth adding** as belt-and-braces, to
+  nudge an upload check the moment the system comes back (a thief's
+  power-cycle is a classic move):
+
+```xml
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+<!-- inside <application> -->
+<receiver android:name=".security.BootReceiver" android:exported="false">
+    <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+    </intent-filter>
+</receiver>
+```
+
+```kotlin
+package com.tamboapp.security
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+
+class BootReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
+            EvidenceUploadWorker.enqueue(context) // drains anything queued pre-reboot
+        }
+    }
+}
+```
+
+- **Do not reach for HeadlessJsTaskService** for the theft path. It would
+  spin up the whole JS bundle in the background to do what twenty lines of
+  Kotlin do — slower, battery-hostile, and dependent on the RN runtime
+  surviving conditions (Doze, force-stop, low memory) it was never meant
+  for. The rule from finding 4 stands: theft path native, JS for owner UI.
+- **Force-stop caveat** (applies to everything above): if the user
+  force-stops the app from Settings, Android blocks *all* its receivers —
+  device admin included — until the next manual launch. No consumer app
+  escapes this; the Device-Owner edition (docs/access-tiers-decision.md)
+  is the only lawful route around it.
+
+---
+
+## 9. Order of work
 
 1. **Detection** (§3): manifest receiver + `onPasswordFailed` + admin-consent
    flow. Verifiable in a day: fail the PIN on a test device, watch the queue.
