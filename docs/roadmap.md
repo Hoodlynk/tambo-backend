@@ -187,6 +187,15 @@ Delivery (Kenya-mapped JSON+PDF, Ed25519-signed manifest, first-alert +
 full-pack email via the live Resend spine). WhatsApp deferred. One open gate
 flagged for the owner: **hosting region** (blocks the DPIA, not the code).
 
+### 🔶 F1 — failed-unlock detection (backend done; Android side missing)
+Backend half is live: ingest counts `UNLOCK_FAILED` envelopes, threshold
+auto-opens episodes, and `GET /devices/:id/activity` is the owner report. The
+Android app does **not** yet implement detection or upload — audit of the app
+repo plus the exact fix (manifest wiring, `onPasswordFailed`, native evidence
+queue, WorkManager uploader, enrolment flow) is in
+[f1-android-audit.md](f1-android-audit.md); the wire contract it targets is
+[f1-client-contract.md](f1-client-contract.md).
+
 ### Open product decision: access tier
 Whether Tambo stays a consumer-Play app (device-admin failed-unlock detection
 is the capability ceiling) or gains a **Device-Owner edition** for enrolled
