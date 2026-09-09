@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { testServer } from '../setup/testServer';
+import config from '../../src/config/config';
 import { noopMailer } from '../../src/services/mailer/noop.mailer';
 import { retryPhantom } from './http';
 import User from '../../src/models/user.model';
@@ -57,9 +58,29 @@ export const startLogin = (
   password = CREDENTIALS.password,
 ) => request(testServer()).post('/api/auth/login').send({ email, password });
 
-/** Full signup. Returns the session issued by registration. */
+/** Accepts the current version of both legal documents for a session. */
+export const acceptLegalDocs = async (accessToken: string): Promise<void> => {
+  for (const doc of ['terms', 'privacy'] as const) {
+    const res = await request(testServer())
+      .post('/api/v1/legal/accept')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ doc, version: config.legal[doc].version, scrolledToEnd: true });
+    if (res.status !== 200) {
+      throw new Error(
+        `acceptLegalDocs failed: ${res.status} ${JSON.stringify(res.body)}`,
+      );
+    }
+  }
+};
+
+/**
+ * Full signup. Returns the session issued by registration. Accepts the legal
+ * documents by default (device enrolment is gated on them); pass
+ * `acceptLegal: false` to get a user who has NOT accepted.
+ */
 export const registerUser = async (
   overrides: Partial<typeof CREDENTIALS> = {},
+  { acceptLegal = true }: { acceptLegal?: boolean } = {},
 ): Promise<Registered> => {
   const res = await retryPhantom(() => startRegister(overrides), 'register');
   if (res.status !== 201) {
@@ -67,6 +88,8 @@ export const registerUser = async (
       `registerUser failed: ${res.status} ${JSON.stringify(res.body)}`,
     );
   }
+
+  if (acceptLegal) await acceptLegalDocs(res.body.tokens.accessToken);
 
   return {
     accessToken: res.body.tokens.accessToken,

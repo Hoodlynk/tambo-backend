@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as deviceController from '../../controllers/device.controller';
 import { requireAuth } from '../../middlewares/auth.middleware';
+import { requireLegalAcceptance } from '../../middlewares/legalGate.middleware';
 import { validate } from '../../middlewares/validate';
 import {
   deviceIdSchema,
@@ -15,8 +16,12 @@ const router = Router();
 // everything device-management is owner-only
 router.use(requireAuth);
 
+// enrolment starts unlock/location collection - gated on current T&C +
+// privacy acceptance (docs/legal-api.md). Managing an EXISTING device is not:
+// a version bump must never brick an already-protected phone mid-theft.
 router.post(
   '/',
+  requireLegalAcceptance,
   validate({ body: deviceSchema }),
   asyncHandler(deviceController.register),
 );

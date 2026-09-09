@@ -79,6 +79,16 @@ interface Config {
     /** Disable in tests that are not specifically exercising limits. */
     enabled: boolean;
   };
+  /**
+   * The legal documents users must accept. The content LIVES on the website;
+   * the API serves version + URL, records acceptances, and tells the app when
+   * a user's acceptance is stale. Bump a version here (env) whenever the
+   * document changes materially - every user is then re-prompted.
+   */
+  legal: {
+    terms: { version: string; url: string };
+    privacy: { version: string; url: string };
+  };
   cors: {
     /** Empty means "no browser origins allowed" - correct for a mobile-only API. */
     allowedOrigins: string[];
@@ -217,6 +227,18 @@ const config: Config = {
   },
   rateLimit: {
     enabled: process.env.RATE_LIMIT_ENABLED !== 'false',
+  },
+  legal: {
+    // the live documents on the website; both state "Version 1.0" on-page -
+    // keep the version here in lockstep with what the page says
+    terms: {
+      version: process.env.TERMS_VERSION || '1.0',
+      url: process.env.TERMS_URL || 'https://tambo-app.com/terms',
+    },
+    privacy: {
+      version: process.env.PRIVACY_VERSION || '1.0',
+      url: process.env.PRIVACY_URL || 'https://tambo-app.com/privacy',
+    },
   },
   cors: {
     allowedOrigins: (process.env.CORS_ALLOWED_ORIGINS || '')
