@@ -4,6 +4,7 @@ import type { ITheftEpisode } from '../models/theftEpisode.model';
 import User from '../models/user.model';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
 import * as buddyService from './buddy.service';
+import { lastKnownLocation, mapsLink } from './evidenceLocation';
 import { mailer } from './mailer';
 import type { MailMessage } from './mailer';
 import { buildPack } from './pack.service';
@@ -70,18 +71,34 @@ export const sendFirstAlert = async (
 
   const trigger =
     episode.openedBy === 'device'
-      ? 'repeated failed unlock attempts were detected on'
-      : 'the owner marked';
+      ? 'was flagged as possibly stolen after repeated failed unlock attempts'
+      : `was marked as possibly stolen by ${owner.name}`;
 
   const when = episode.openedAt.toISOString();
   const subject = `Tambo alert: ${device.name} may be stolen`;
+
+  // the essentials the police report and the operator blacklist request need:
+  // IMEIs, make/model, and where the attempts happened (when the device
+  // managed to report a location before/while going dark)
+  const known = await lastKnownLocation(device._id);
+  const essentials = [
+    `Device: ${device.make} ${device.deviceModel} ("${device.name}")`,
+    `IMEI${device.imeis.length > 1 ? 's' : ''}: ${device.imeis.join(', ')}`,
+    known
+      ? `Last known location: ${known.location.lat}, ${known.location.lng}` +
+        (known.location.accuracyM ? ` (±${known.location.accuracyM}m)` : '') +
+        ` at ${known.at.toISOString()} - ${mapsLink(known.location)}`
+      : 'Last known location: not yet reported.',
+  ].join('\n');
 
   const bodyFor = (recipientName: string, isOwner: boolean): string =>
     [
       `Hi ${recipientName},`,
       '',
-      `At ${when}, ${trigger} ${isOwner ? 'your' : `${owner.name}'s`} phone ` +
-        `"${device.name}" (${device.make} ${device.deviceModel}) as possibly stolen.`,
+      `At ${when}, ${isOwner ? 'your' : `${owner.name}'s`} phone ` +
+        `"${device.name}" (${device.make} ${device.deviceModel}) ${trigger}.`,
+      '',
+      essentials,
       '',
       isOwner
         ? 'Tambo is collecting evidence now. You will receive the full evidence ' +

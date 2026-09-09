@@ -8,6 +8,8 @@ import { AppError } from '../utils/appError';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
 import { sha256Hex } from '../utils/tokens';
 import * as episodeService from './episode.service';
+import { parseLocation } from './evidenceLocation';
+import type { EvidenceLocation } from './evidenceLocation';
 import { extendMediaExpiry, saveMedia } from './storage/media.storage';
 import type { EnvelopeInput } from '../validation/evidence.schema';
 
@@ -262,7 +264,12 @@ export interface UnlockAttemptReport {
   windowMinutes: number;
   lastAttemptAt: string | null;
   /** Most recent failed attempts, newest first (capped). */
-  recent: { capturedAt: string; receivedAt: string }[];
+  recent: {
+    capturedAt: string;
+    receivedAt: string;
+    /** Where the attempt happened, when the payload carried a location. */
+    location: EvidenceLocation | null;
+  }[];
 }
 
 /**
@@ -288,7 +295,7 @@ export const unlockActivity = async (
     EvidenceEnvelope.find({ device: device._id, type: 'UNLOCK_FAILED' })
       .sort({ receivedAt: -1 })
       .limit(limit)
-      .select('capturedAt receivedAt'),
+      .select('capturedAt receivedAt payload'),
   ]);
 
   return {
@@ -300,6 +307,7 @@ export const unlockActivity = async (
     recent: recent.map((envelope) => ({
       capturedAt: envelope.capturedAt.toISOString(),
       receivedAt: envelope.receivedAt.toISOString(),
+      location: parseLocation(envelope.payload),
     })),
   };
 };

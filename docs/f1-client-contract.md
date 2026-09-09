@@ -98,15 +98,30 @@ the string between hashing and sending. Hash the bytes you send.
 
 ### `UNLOCK_FAILED` payload
 
-The server treats `payload` as opaque for `UNLOCK_FAILED` — it only counts the
-envelopes. Put whatever helps the owner read the pack later; a suggested shape:
+The server treats `payload` as opaque for counting and integrity (it is hashed
+and stored byte-for-byte). But it also *reads* it leniently to surface WHERE an
+attempt happened — in the owner's activity report and in the first-alert email.
+Canonical shape:
 
 ```json
-{ "attemptNo": 3, "method": "pin" }
+{
+  "attemptNo": 3,
+  "method": "pin",
+  "location": { "lat": -1.2921, "lng": 36.8219, "accuracyM": 12 }
+}
 ```
 
-(`method` ∈ `pin | password | pattern` — biometric failures never reach you;
-see the F1 deep-dive on the biometric blind spot.)
+- `method` ∈ `pin | password | pattern` — biometric failures never reach you;
+  see the F1 deep-dive on the biometric blind spot.
+- `location` is **optional but send it whenever you have a fix** — it is what
+  makes the alert email actionable ("Last known location: … — maps link").
+  `lat`/`lng` are numbers (not strings); `accuracyM` is the GPS accuracy radius
+  in metres (the `accuracy` spelling is also accepted). The parser also accepts
+  the three fields at the payload's top level. A payload without a usable
+  location is fine — it just contributes no location.
+- `TRAIL_POINT` payloads use the same location shape; the server's
+  "last known location" (used in the alert email) is the newest location-bearing
+  `UNLOCK_FAILED` **or** `TRAIL_POINT` envelope.
 
 ### The response — always `200`, read per-envelope
 
@@ -211,8 +226,16 @@ attempts. It's fed entirely by the `UNLOCK_FAILED` envelopes the phone uploads:
 
 ```json
 { "activity": { "inWindow": 2, "threshold": 3, "toThreshold": 1,
-                "windowMinutes": 10, "lastAttemptAt": "...", "recent": [ ... ] } }
+                "windowMinutes": 10, "lastAttemptAt": "...",
+                "recent": [ { "capturedAt": "...", "receivedAt": "...",
+                              "location": { "lat": -1.2921, "lng": 36.8219,
+                                            "accuracyM": 12 } } ] } }
 ```
+
+Each `recent` item carries `location` — parsed from the envelope's payload
+(see the `UNLOCK_FAILED` payload shape) — or `null` when the payload had no
+usable fix. This is what feeds the app's per-attempt coordinates in the unlock
+log.
 
 So the value of that owner screen is exactly as good as the phone's upload
 reliability. Upload promptly and this screen is live.
