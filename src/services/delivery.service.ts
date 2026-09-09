@@ -5,6 +5,7 @@ import User from '../models/user.model';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
 import * as buddyService from './buddy.service';
 import { lastKnownLocation, mapsLink } from './evidenceLocation';
+import * as familiarLocationService from './familiarLocation.service';
 import { mailer } from './mailer';
 import type { MailMessage } from './mailer';
 import { buildPack } from './pack.service';
@@ -81,12 +82,23 @@ export const sendFirstAlert = async (
   // IMEIs, make/model, and where the attempts happened (when the device
   // managed to report a location before/while going dark)
   const known = await lastKnownLocation(device._id);
+  // familiar places are interpretation only (F3): they change this sentence,
+  // never whether the alert fires
+  const familiar = known
+    ? familiarLocationService.matchFamiliar(
+        await familiarLocationService.list(episode.user.toString()),
+        known.location,
+      )
+    : null;
   const essentials = [
     `Device: ${device.make} ${device.deviceModel} ("${device.name}")`,
     `IMEI${device.imeis.length > 1 ? 's' : ''}: ${device.imeis.join(', ')}`,
     known
       ? `Last known location: ${known.location.lat}, ${known.location.lng}` +
         (known.location.accuracyM ? ` (±${known.location.accuracyM}m)` : '') +
+        (familiar
+          ? ` - near familiar location "${familiar.label}" (~${familiar.distanceM}m from its centre)`
+          : '') +
         ` at ${known.at.toISOString()} - ${mapsLink(known.location)}`
       : 'Last known location: not yet reported.',
   ].join('\n');

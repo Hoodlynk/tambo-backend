@@ -114,20 +114,57 @@ export const renderPackPdf = async (pack: EvidencePack): Promise<Buffer> => {
 
   // --- Location trail -----------------------------------------------------------
   heading(`Location trail (${pack.trail.length} points)`);
-  if (pack.trail.length === 0) {
+
+  const describePoint = (point: (typeof pack.trail)[number]): string =>
+    `${point.lat}, ${point.lng}` +
+    (point.accuracyM !== undefined ? ` (±${point.accuracyM}m)` : '') +
+    (point.familiar
+      ? ` - within familiar location "${point.familiar.label}" (~${point.familiar.distanceM}m from its centre)`
+      : '');
+  const mapsLine = (link: string): void => {
+    doc.fillColor('#1a56db').text(`  ${link}`, { link });
+    doc.fillColor('#000000');
+  };
+
+  const firstFix = pack.trail[0];
+  const latestFix = pack.trail[pack.trail.length - 1];
+  if (!firstFix || !latestFix) {
     doc.text('No location points recorded for this episode.');
-  }
-  for (const point of pack.trail) {
-    const coords =
-      point.lat !== undefined && point.lng !== undefined
-        ? `${point.lat}, ${point.lng}${point.accuracy !== undefined ? ` (±${point.accuracy}m)` : ''}`
-        : 'no fix';
-    doc.text(`- ${point.receivedAt}: ${coords}`);
-    if (point.mapsLink) {
-      doc
-        .fillColor('#1a56db')
-        .text(`  ${point.mapsLink}`, { link: point.mapsLink });
-      doc.fillColor('#000000');
+  } else if (pack.trailSummary.movement === 'static') {
+    // one place under attack reads differently from a phone on the move -
+    // say so, and lead with the single location rather than a redundant list
+    doc.text(
+      `The device remained in one place across ${pack.trail.length} location fixes.`,
+    );
+    doc.text(`Location: ${describePoint(firstFix)}`);
+    doc.text(
+      `First fix ${firstFix.receivedAt}, latest fix ${latestFix.receivedAt}.`,
+    );
+    mapsLine(firstFix.mapsLink);
+  } else {
+    if (pack.trailSummary.movement === 'moving') {
+      doc.text('The device was MOVING during this episode.');
+      if (pack.trailSummary.leftFamiliar) {
+        doc
+          .font('Helvetica-Bold')
+          .text(
+            `It left familiar location "${pack.trailSummary.leftFamiliar.label}" at ~${pack.trailSummary.leftFamiliar.at}.`,
+          )
+          .font('Helvetica');
+      }
+      doc.text(`First fix ${firstFix.receivedAt}: ${describePoint(firstFix)}`);
+      mapsLine(firstFix.mapsLink);
+      doc.text(
+        `Latest fix ${latestFix.receivedAt}: ${describePoint(latestFix)}`,
+      );
+      mapsLine(latestFix.mapsLink);
+      doc.moveDown(0.2).text('Full trail:');
+    }
+    for (const point of pack.trail) {
+      doc.text(
+        `- ${point.receivedAt} [${point.source}]: ${describePoint(point)}`,
+      );
+      mapsLine(point.mapsLink);
     }
   }
 

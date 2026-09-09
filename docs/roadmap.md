@@ -1,7 +1,7 @@
 # Build plan & status
 
 The single source of truth for where the backend is and what comes next.
-Last updated: 2026-09-04.
+Last updated: 2026-09-09.
 
 Legend: ✅ done & tested · 🔶 partially done · ⬜ not started · 👤 needs a human action
 
@@ -186,6 +186,19 @@ verification, GridFS media, retention-as-TTL) → **F-C** Evidence Pack &
 Delivery (Kenya-mapped JSON+PDF, Ed25519-signed manifest, first-alert +
 full-pack email via the live Resend spine). WhatsApp deferred. One open gate
 flagged for the owner: **hosting region** (blocks the DPIA, not the code).
+
+### ✅ F3 — location trail, static vs moving, familiar locations (2026-09-09)
+Built exactly as scoped in [f3-location-trail-scoping.md](f3-location-trail-scoping.md);
+API reference in [trail-api.md](trail-api.md). `GET /episodes/:id/trail`
+(ordered fixes from TRAIL_POINT + UNLOCK_FAILED, static/moving/unknown
+classification, familiar annotation, "left familiar location" departure),
+familiar-locations CRUD (`/api/v1/familiar-locations`, cap 10, interpretation
+only — never touches thresholds/episodes/alert decisions), pack JSON gains
+`trailSummary` + per-point `familiar` (trail points now parse the nested
+`location` payload shape too), PDF trail section renders static vs moving,
+first-alert email annotates the last known location with the familiar place.
+Owner decisions taken (2026-09-09): departures enrich existing reports only
+(no additional email yet); familiar places are owner-entered only in v1.
 
 ### 🔶 F1 — failed-unlock detection (backend done; Android side missing)
 Backend half is live: ingest counts `UNLOCK_FAILED` envelopes, threshold

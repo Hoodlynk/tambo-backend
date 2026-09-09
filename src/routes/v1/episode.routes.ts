@@ -25,6 +25,13 @@ router.get(
   asyncHandler(episodeController.get),
 );
 
+// the location trail (F3): ordered fixes, static/moving, familiar context
+router.get(
+  '/:id/trail',
+  validate({ params: episodeIdSchema }),
+  asyncHandler(episodeController.trail),
+);
+
 // --- The evidence pack (F-C): the dossier this product exists to produce ----
 router.get(
   '/:id/pack',

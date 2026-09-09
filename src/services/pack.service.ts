@@ -1,12 +1,13 @@
 import Device from '../models/device.model';
 import EvidenceEnvelope from '../models/evidenceEnvelope.model';
-import type { IEvidenceEnvelope } from '../models/evidenceEnvelope.model';
 import PackDelivery from '../models/packDelivery.model';
 import TheftEpisode from '../models/theftEpisode.model';
 import type { ITheftEpisode } from '../models/theftEpisode.model';
 import User from '../models/user.model';
 import { AppError } from '../utils/appError';
 import { packPublicKeyBase64, signManifest } from '../utils/signing';
+import { buildEpisodeTrail } from './trail.service';
+import type { Movement } from './trail.service';
 
 /**
  * The evidence pack: the messy signals of a theft turned into the dossier a
@@ -20,12 +21,22 @@ import { packPublicKeyBase64, signManifest } from '../utils/signing';
  */
 
 export interface PackTrailPoint {
-  capturedAt: string;
   receivedAt: string;
-  lat?: number;
-  lng?: number;
-  accuracy?: number;
-  mapsLink?: string;
+  /** Which evidence type carried the fix - UNLOCK_FAILED or TRAIL_POINT. */
+  source: string;
+  lat: number;
+  lng: number;
+  accuracyM?: number;
+  mapsLink: string;
+  /** The owner-registered familiar place this fix is inside, if any. */
+  familiar: { label: string; distanceM: number } | null;
+}
+
+export interface PackTrailSummary {
+  /** static = one place; moving = a path; unknown = under 2 usable fixes. */
+  movement: Movement;
+  /** Set when a moving trail left a familiar place - the strongest theft cue. */
+  leftFamiliar: { label: string; at: string } | null;
 }
 
 export interface PackManifestItem {
@@ -59,6 +70,7 @@ export interface EvidencePack {
   };
   unlockAttempts: { capturedAt: string; receivedAt: string; detail: string }[];
   trail: PackTrailPoint[];
+  trailSummary: PackTrailSummary;
   photos: {
     envelopeId: string;
     receivedAt: string;
@@ -111,20 +123,6 @@ export const canonicalManifest = (
     })),
   });
 
-const parsePayload = (envelope: IEvidenceEnvelope): Record<string, unknown> => {
-  try {
-    const parsed: unknown = JSON.parse(envelope.payload);
-    return typeof parsed === 'object' && parsed !== null
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
-};
-
-const asNumber = (value: unknown): number | undefined =>
-  typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-
 /** Loads an episode the caller owns, or 404s indistinguishably. */
 export const getOwnedEpisode = async (
   userId: string,
@@ -142,16 +140,18 @@ export const buildPack = async (
 ): Promise<EvidencePack> => {
   const episode = await getOwnedEpisode(userId, episodeId);
 
-  const [owner, device, envelopes, firstAlert] = await Promise.all([
-    User.findById(episode.user),
-    Device.findById(episode.device),
-    EvidenceEnvelope.find({ episode: episode._id })
-      .sort({ receivedAt: 1 })
-      .exec(),
-    PackDelivery.findOne({ episode: episode._id, kind: 'first_alert' })
-      .sort({ sentAt: 1 })
-      .exec(),
-  ]);
+  const [owner, device, envelopes, firstAlert, episodeTrail] =
+    await Promise.all([
+      User.findById(episode.user),
+      Device.findById(episode.device),
+      EvidenceEnvelope.find({ episode: episode._id })
+        .sort({ receivedAt: 1 })
+        .exec(),
+      PackDelivery.findOne({ episode: episode._id, kind: 'first_alert' })
+        .sort({ sentAt: 1 })
+        .exec(),
+      buildEpisodeTrail(episode),
+    ]);
 
   if (!owner || !device) {
     throw AppError.notFound(
@@ -168,25 +168,29 @@ export const buildPack = async (
       detail: envelope.payload,
     }));
 
-  const trail: PackTrailPoint[] = envelopes
-    .filter((envelope) => envelope.type === 'TRAIL_POINT')
-    .map((envelope) => {
-      const payload = parsePayload(envelope);
-      const lat = asNumber(payload.lat);
-      const lng = asNumber(payload.lng);
-      const accuracy = asNumber(payload.accuracy);
-      return {
-        capturedAt: envelope.capturedAt.toISOString(),
-        receivedAt: envelope.receivedAt.toISOString(),
-        ...(lat !== undefined ? { lat } : {}),
-        ...(lng !== undefined ? { lng } : {}),
-        ...(accuracy !== undefined ? { accuracy } : {}),
-        // v1: link rather than rendered map image (features plan decision #3)
-        ...(lat !== undefined && lng !== undefined
-          ? { mapsLink: `https://maps.google.com/?q=${lat},${lng}` }
-          : {}),
-      };
-    });
+  // the F3 read model: every located fix (trail points AND failed unlocks),
+  // familiar-annotated, classified static/moving. Fixless envelopes are noise
+  // here; the manifest still lists every envelope.
+  const trail: PackTrailPoint[] = episodeTrail.points.map((point) => ({
+    receivedAt: point.at.toISOString(),
+    source: point.source,
+    lat: point.lat,
+    lng: point.lng,
+    ...(point.accuracyM !== undefined ? { accuracyM: point.accuracyM } : {}),
+    // v1: link rather than rendered map image (features plan decision #3)
+    mapsLink: `https://maps.google.com/?q=${point.lat},${point.lng}`,
+    familiar: point.familiar,
+  }));
+
+  const trailSummary: PackTrailSummary = {
+    movement: episodeTrail.movement,
+    leftFamiliar: episodeTrail.leftFamiliar
+      ? {
+          label: episodeTrail.leftFamiliar.label,
+          at: episodeTrail.leftFamiliar.at.toISOString(),
+        }
+      : null,
+  };
 
   const photos = envelopes
     .filter((envelope) => envelope.type === 'PHOTO')
@@ -245,6 +249,7 @@ export const buildPack = async (
     },
     unlockAttempts,
     trail,
+    trailSummary,
     photos,
     otherEvidence,
     actionChecklist: ACTION_CHECKLIST,

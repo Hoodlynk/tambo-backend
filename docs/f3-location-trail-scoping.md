@@ -1,9 +1,9 @@
 # F3 scoping — location trail, static vs moving, familiar locations
 
-**Status: scoping only — not yet built.** This captures the product intent
-(from the 2026-09-09 sprint brief) and proposes the backend design, so build
-can start without re-deriving it. What already exists is listed first so we
-don't rebuild it.
+**Status: BUILT (2026-09-09) — see [trail-api.md](trail-api.md) for the API
+reference.** This captures the product intent (from the 2026-09-09 sprint
+brief) and the backend design as proposed; the build followed it. What
+already existed is listed first so we didn't rebuild it.
 
 ## Already in place (F1/F-B)
 

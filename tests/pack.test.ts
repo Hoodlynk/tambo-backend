@@ -237,11 +237,15 @@ describe('GET /episodes/:id/pack', () => {
     expect(pack.unlockAttempts).toHaveLength(2);
     expect(pack.trail).toHaveLength(2);
     expect(pack.trail[0]).toMatchObject({
+      source: 'TRAIL_POINT',
       lat: -1.2921,
       lng: 36.8219,
-      accuracy: 15,
+      accuracyM: 15,
+      familiar: null,
     });
     expect(pack.trail[0]!.mapsLink).toContain('maps.google.com');
+    // the two fixes are ~1.2km apart: a moving trail
+    expect(pack.trailSummary).toEqual({ movement: 'moving', leftFamiliar: null });
     expect(pack.photos).toHaveLength(1);
     expect(pack.photos[0]!.sha256).toBe(sha256Hex(TINY_JPEG));
     expect(pack.otherEvidence).toHaveLength(1);
