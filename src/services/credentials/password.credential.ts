@@ -7,7 +7,6 @@ import { AppError } from '../../utils/appError';
 import { isDuplicateKeyError } from '../../utils/mongoErrors';
 import { generateOpaqueToken, hashOpaqueToken } from '../../utils/tokens';
 import { mailer } from '../mailer';
-import * as buddyService from '../buddy.service';
 import * as otpService from '../otp.service';
 import type { ChallengeSummary } from '../otp.service';
 import * as sessionService from '../session.service';
@@ -65,11 +64,18 @@ const setPassword = async (user: IUser, newPassword: string): Promise<void> => {
   ]);
 };
 
-/** Creates an account and starts its first session immediately. */
+/**
+ * Creates an account and opens a signup OTP challenge - NO session yet. The
+ * emailed code is the proof of mailbox possession; verification (otp.service
+ * applyPurpose) sets emailVerifiedAt, binds any pending buddy invites, and
+ * starts the first session.
+ */
 export const register = async (
   input: RegisterInput,
   userAgent?: string,
-): Promise<AuthResult> => {
+): Promise<ChallengeSummary> => {
+  const passwordHash = await hashPassword(input.password);
+
   // No exists() pre-check: the unique index is the authority, and translating
   // its violation avoids the race where two concurrent registrations both pass
   // a pre-check and the loser surfaces as a 500.
@@ -78,28 +84,42 @@ export const register = async (
     user = await User.create({
       name: input.name,
       email: input.email,
-      passwordHash: await hashPassword(input.password),
-      emailVerifiedAt: new Date(),
+      passwordHash,
     });
   } catch (error) {
-    if (isDuplicateKeyError(error)) {
+    if (!isDuplicateKeyError(error)) throw error;
+
+    // The address is taken. If that account never proved the mailbox, this
+    // registration SUPERSEDES it - possession of the mailbox (the code) is
+    // what decides ownership, and an abandoned signup must not squat the
+    // address forever. A verified account is a real conflict.
+    const existing = await User.findOne({ email: input.email });
+    if (!existing || existing.emailVerifiedAt) {
       throw AppError.conflict(
         'An account with that email already exists.',
         'email_taken',
       );
     }
-    throw error;
+    existing.name = input.name;
+    existing.passwordHash = passwordHash;
+    await existing.save();
+    user = existing;
   }
 
-  await buddyService.bindPendingInvites(user);
-  return { user, tokens: await sessionService.startSession(user, userAgent) };
+  // burns any previous signup challenge for this user - only the newest code works
+  return otpService.createChallenge(user, 'signup', { userAgent });
 };
 
-/** Password login; starts a session immediately. */
+/**
+ * Password login. A verified account gets a session directly; an account whose
+ * mailbox was never proven (abandoned signup) gets a login OTP challenge
+ * instead - the password alone must not start a session for a mailbox nobody
+ * has demonstrated owning. Verifying the code heals emailVerifiedAt.
+ */
 export const login = async (
   input: LoginInput,
   userAgent?: string,
-): Promise<AuthResult> => {
+): Promise<AuthResult | ChallengeSummary> => {
   const user = await User.findOne({ email: input.email }).select(
     '+passwordHash',
   );
@@ -115,6 +135,10 @@ export const login = async (
       'Invalid email or password.',
       'invalid_credentials',
     );
+  }
+
+  if (!user.emailVerifiedAt) {
+    return otpService.createChallenge(user, 'login', { userAgent });
   }
 
   return { user, tokens: await sessionService.startSession(user, userAgent) };

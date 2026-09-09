@@ -3,8 +3,6 @@ import { testServer } from '../setup/testServer';
 import config from '../../src/config/config';
 import { noopMailer } from '../../src/services/mailer/noop.mailer';
 import { retryPhantom } from './http';
-import User from '../../src/models/user.model';
-import * as otpService from '../../src/services/otp.service';
 
 export const CREDENTIALS = {
   name: 'Ada Lovelace',
@@ -43,13 +41,10 @@ export const startRegister = (overrides: Partial<typeof CREDENTIALS> = {}) =>
 
 export const startSignupChallenge = async () => {
   const registration = await startRegister();
-  const user = await User.findOne({ email: EMAIL });
-  if (registration.status !== 201 || !user) {
+  if (registration.status !== 201 || !registration.body.challenge) {
     throw new Error('could not create signup challenge fixture');
   }
-  return {
-    body: { challenge: await otpService.createChallenge(user, 'signup') },
-  };
+  return { body: { challenge: registration.body.challenge } };
 };
 
 /** Returns the raw login response. */
@@ -74,8 +69,9 @@ export const acceptLegalDocs = async (accessToken: string): Promise<void> => {
 };
 
 /**
- * Full signup. Returns the session issued by registration. Accepts the legal
- * documents by default (device enrolment is gated on them); pass
+ * Full signup: register, complete the signup OTP (the code is pulled from the
+ * captured mail), and return the session the verify step issues. Accepts the
+ * legal documents by default (device enrolment is gated on them); pass
  * `acceptLegal: false` to get a user who has NOT accepted.
  */
 export const registerUser = async (
@@ -83,18 +79,28 @@ export const registerUser = async (
   { acceptLegal = true }: { acceptLegal?: boolean } = {},
 ): Promise<Registered> => {
   const res = await retryPhantom(() => startRegister(overrides), 'register');
-  if (res.status !== 201) {
+  if (res.status !== 201 || !res.body.challenge) {
     throw new Error(
       `registerUser failed: ${res.status} ${JSON.stringify(res.body)}`,
     );
   }
 
-  if (acceptLegal) await acceptLegalDocs(res.body.tokens.accessToken);
+  const verified = await retryPhantom(
+    () => verifyOtp(res.body.challenge.challengeId, latestOtpCode()),
+    'verify signup otp',
+  );
+  if (verified.status !== 200) {
+    throw new Error(
+      `registerUser verify failed: ${verified.status} ${JSON.stringify(verified.body)}`,
+    );
+  }
+
+  if (acceptLegal) await acceptLegalDocs(verified.body.tokens.accessToken);
 
   return {
-    accessToken: res.body.tokens.accessToken,
-    refreshToken: res.body.tokens.refreshToken,
-    userId: res.body.user._id,
+    accessToken: verified.body.tokens.accessToken,
+    refreshToken: verified.body.tokens.refreshToken,
+    userId: verified.body.user._id,
   };
 };
 

@@ -43,8 +43,14 @@ const sendChallenge = (
 
 // --- Credential entry points -------------------------------------------------
 
+/** Register/login can end in a session OR a pending OTP challenge. */
+const isChallenge = (
+  result: AuthResult | otpService.ChallengeSummary,
+): result is otpService.ChallengeSummary => 'challengeId' in result;
+
 export const register = async (req: Request, res: Response): Promise<void> => {
-  sendAuthResult(
+  // always a challenge: the session arrives at POST /auth/otp/verify
+  sendChallenge(
     res,
     await passwordCredential.register(
       req.body as RegisterInput,
@@ -55,10 +61,13 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 };
 
 export const login = async (req: Request, res: Response): Promise<void> => {
-  sendAuthResult(
-    res,
-    await passwordCredential.login(req.body as LoginInput, userAgentOf(req)),
+  const result = await passwordCredential.login(
+    req.body as LoginInput,
+    userAgentOf(req),
   );
+  // a challenge means the mailbox was never proven - verify completes login
+  if (isChallenge(result)) sendChallenge(res, result);
+  else sendAuthResult(res, result);
 };
 
 export const changePassword = async (

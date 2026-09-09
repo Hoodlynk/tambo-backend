@@ -1,38 +1,66 @@
 import request from 'supertest';
 import { testServer } from './setup/testServer';
 import User from '../src/models/user.model';
+import { noopMailer } from '../src/services/mailer/noop.mailer';
 import { clearTestDb, closeTestDb, connectTestDb } from './helpers/db';
 import {
   CREDENTIALS,
   EMAIL,
+  latestOtpCode,
   loginUser,
   registerUser,
   startLogin,
   startRegister,
+  verifyOtp,
 } from './helpers/factories';
 
 beforeAll(connectTestDb, 120_000);
-afterEach(clearTestDb);
+afterEach(async () => {
+  await clearTestDb();
+  noopMailer.clear();
+});
 afterAll(closeTestDb);
 
 describe('POST /api/auth/register', () => {
-  it('returns the user and tokens immediately', async () => {
+  it('returns a signup challenge, not a session - the mailbox must be proven first', async () => {
     const res = await startRegister();
 
     expect(res.status).toBe(201);
-    expect(res.body.user).toMatchObject({
+    expect(res.body.challenge).toMatchObject({ purpose: 'signup' });
+    expect(typeof res.body.challenge.challengeId).toBe('string');
+    expect(res.body.tokens).toBeUndefined();
+    expect(res.body.user).toBeUndefined();
+
+    // the account exists but is NOT verified until the code is entered
+    const user = await User.findOne({ email: EMAIL });
+    expect(user).toBeTruthy();
+    expect(user?.emailVerifiedAt).toBeUndefined();
+
+    // the code was emailed to the address being claimed
+    expect(noopMailer.sent.at(-1)?.to).toBe(EMAIL);
+    expect(noopMailer.sent.at(-1)?.subject).toContain('Verify');
+  });
+
+  it('verifying the signup code marks the email verified and starts the session', async () => {
+    const res = await startRegister();
+    const verified = await verifyOtp(
+      res.body.challenge.challengeId,
+      latestOtpCode(),
+    );
+
+    expect(verified.status).toBe(200);
+    expect(verified.body.user).toMatchObject({
       name: 'Ada Lovelace',
       email: EMAIL,
       role: 'user',
     });
-    expect(res.body.user.emailVerifiedAt).toBeTruthy();
-    expect(typeof res.body.tokens.accessToken).toBe('string');
-    expect(typeof res.body.tokens.refreshToken).toBe('string');
-    expect(res.body.challenge).toBeUndefined();
+    expect(verified.body.user.emailVerifiedAt).toBeTruthy();
+    expect(typeof verified.body.tokens.accessToken).toBe('string');
+    expect(typeof verified.body.tokens.refreshToken).toBe('string');
 
     const me = await request(testServer())
       .get('/api/auth/me')
-      .set('Authorization', `Bearer ${res.body.tokens.accessToken}`);
+      .set('Authorization', `Bearer ${verified.body.tokens.accessToken}`);
     expect(me.status).toBe(200);
   });
 
@@ -40,10 +68,10 @@ describe('POST /api/auth/register', () => {
     const res = await startRegister();
 
     expect(JSON.stringify(res.body)).not.toContain('$2b$');
-    expect(res.body.user.passwordHash).toBeUndefined();
+    expect(res.body.user).toBeUndefined();
   });
 
-  it('treats email as case-insensitive for uniqueness', async () => {
+  it('rejects a VERIFIED email as taken, case-insensitively', async () => {
     await registerUser();
     const res = await startRegister({ email: 'ADA@TAMBO.APP' });
 
@@ -51,23 +79,37 @@ describe('POST /api/auth/register', () => {
     expect(res.body.code).toBe('email_taken');
   });
 
-  it('resolves a concurrent duplicate registration as one 201 and one 409', async () => {
-    const results = await Promise.all([startRegister(), startRegister()]);
-    const statuses = results.map((r) => r.status).sort();
+  it('lets a new registration supersede an UNVERIFIED account (no address squatting)', async () => {
+    // an abandoned signup with one password...
+    await startRegister({ password: 'first-try-password' });
 
-    expect(statuses).toEqual([201, 409]);
-    expect(results.find((r) => r.status === 409)?.body.code).toBe(
-      'email_taken',
+    // ...is superseded by a fresh registration with another
+    const second = await startRegister({ password: 'second-try-password' });
+    expect(second.status).toBe(201);
+    expect(await User.countDocuments({ email: EMAIL })).toBe(1);
+
+    // only the NEWEST code completes it, and the new password is the one that counts
+    const verified = await verifyOtp(
+      second.body.challenge.challengeId,
+      latestOtpCode(),
     );
+    expect(verified.status).toBe(200);
+
+    expect((await startLogin(EMAIL, 'first-try-password')).status).toBe(401);
+    expect((await startLogin(EMAIL, 'second-try-password')).status).toBe(200);
   });
 
   it('ignores a client-supplied role instead of trusting it', async () => {
     const res = await startRegister({ role: 'admin' } as Partial<
       typeof CREDENTIALS
     >);
-
     expect(res.status).toBe(201);
-    expect(res.body.user.role).toBe('user');
+
+    const verified = await verifyOtp(
+      res.body.challenge.challengeId,
+      latestOtpCode(),
+    );
+    expect(verified.body.user.role).toBe('user');
   });
 });
 
@@ -83,7 +125,7 @@ describe('POST /api/auth/login', () => {
     expect(res.body.challenge).toBeUndefined();
   });
 
-  it('issues a usable session directly', async () => {
+  it('issues a usable session directly for a verified account', async () => {
     await registerUser();
     const { accessToken } = await loginUser();
 
@@ -125,14 +167,22 @@ describe('POST /api/auth/login', () => {
     expect(stillValid.status).toBe(200);
   });
 
-  it('allows login without an email verification timestamp', async () => {
-    await startRegister();
-    await User.updateOne({ email: EMAIL }, { $unset: { emailVerifiedAt: 1 } });
+  it('returns a login challenge - not a session - when the mailbox was never proven', async () => {
+    await startRegister(); // registered, signup code never entered
 
     const res = await startLogin();
-
     expect(res.status).toBe(200);
-    expect(typeof res.body.tokens.accessToken).toBe('string');
+    expect(res.body.challenge).toMatchObject({ purpose: 'login' });
+    expect(res.body.tokens).toBeUndefined();
+
+    // completing the login code heals verification and starts the session
+    const verified = await verifyOtp(
+      res.body.challenge.challengeId,
+      latestOtpCode(),
+    );
+    expect(verified.status).toBe(200);
+    expect(verified.body.user.emailVerifiedAt).toBeTruthy();
+    expect(typeof verified.body.tokens.accessToken).toBe('string');
   });
 });
 

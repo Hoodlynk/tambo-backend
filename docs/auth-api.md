@@ -35,58 +35,71 @@ wrong guesses, and are single-use. A new challenge for the same purpose kills
 the previous one.
 
 ```
-change-password ──┐                            ┌─> tokens (password/email applied)
-change-email ──────┴──> challenge ──> POST /otp/verify
-                            │                   └─> 401 wrong/expired code
-                            └─> POST /otp/resend (cooldown-limited)
-register/login ──> credentials accepted ──> user + tokens
+register ─────────────────┐
+login (unverified email) ──┤                            ┌─> user + tokens (side effects applied)
+change-password ───────────┼──> challenge ──> POST /otp/verify
+change-email ─────────────┘         │                   └─> 401 wrong/expired code
+                                    └─> POST /otp/resend (cooldown-limited)
+login (verified email) ──> credentials accepted ──> user + tokens directly
 ```
 
 ---
 
 ## POST /register
 
-Creates the account, marks its email as verified without sending a verification
-code, and starts the first session immediately. Email ownership verification is
-currently bypassed in every environment.
+Creates the account **unverified** and emails a 6-digit signup code — no
+session yet. Possession of the mailbox (the code) is what completes signup:
+`POST /otp/verify` sets `emailVerifiedAt`, binds any pending buddy invites,
+and issues the first session.
 
 ```json
 { "name": "Ada Lovelace", "email": "ada@tambo.app", "password": "8+ chars, at most 72 bytes" }
 ```
 
-`201` → user and token pair:
+`201` → a challenge, **not** tokens:
 
 ```json
-{
-  "user": { "_id": "...", "name": "Ada Lovelace", "email": "ada@tambo.app", "role": "user", "emailVerifiedAt": "..." },
-  "tokens": { "accessToken": "eyJ...", "refreshToken": "9f3c...", "expiresIn": "15m" }
-}
+{ "challenge": { "challengeId": "665f...", "purpose": "signup", "expiresInMinutes": 10 } }
 ```
 
 | Code | Status | Meaning |
 |---|---|---|
 | `validation_error` | 400 | See `details` for the offending fields |
-| `email_taken` | 409 | Case-insensitive; `A@x.com` collides with `a@x.com` |
+| `email_taken` | 409 | A **verified** account owns this address (case-insensitive) |
 | `rate_limited` | 429 | 10 per hour per IP |
 
-Unknown keys are stripped, so posting `"role": "admin"` does nothing.
+An address held by an **unverified** account is NOT a conflict: the new
+registration supersedes it (name + password replaced, a fresh code sent, the
+old code burned). An abandoned signup can never squat an address, and only
+whoever can read the mailbox can ever finish claiming it.
+
+Unknown keys are stripped, so posting `"role": "admin"` or `"emailVerifiedAt"`
+does nothing.
 
 ## POST /login
 
-A correct email and password starts a session directly. Login does not require
-an email verification timestamp.
+For a **verified** account, a correct email and password starts a session
+directly. For an account whose mailbox was never proven (an abandoned signup),
+the same call returns a `login` challenge instead — completing it heals
+`emailVerifiedAt` and issues the session.
 
 ```json
 { "email": "ada@tambo.app", "password": "..." }
 ```
 
-`200` → user and token pair:
+`200` → user and token pair (verified account):
 
 ```json
 {
   "user": { "_id": "...", "name": "Ada Lovelace", "email": "ada@tambo.app", "role": "user" },
   "tokens": { "accessToken": "eyJ...", "refreshToken": "9f3c...", "expiresIn": "15m" }
 }
+```
+
+`200` → challenge (unverified account):
+
+```json
+{ "challenge": { "challengeId": "665f...", "purpose": "login", "expiresInMinutes": 10 } }
 ```
 
 | Code | Status | Meaning |
@@ -106,6 +119,8 @@ Completes whichever flow opened the challenge.
 
 | Purpose | On verify |
 |---|---|
+| `signup` | `emailVerifiedAt` set; pending buddy invites bound; first session issued |
+| `login` | Same as signup (heals verification for an abandoned signup); session issued |
 | `password_change` | New password applied; **every other session and reset link revoked**; fresh session issued |
 | `email_change` | Email updated + verified; **every other session and reset link revoked**; fresh session issued |
 

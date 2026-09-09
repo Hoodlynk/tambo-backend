@@ -79,10 +79,9 @@ describe('register validation', () => {
 
     expect(res.status).toBe(201);
     const stored = await User.findOne({});
-    expect(stored?.emailVerifiedAt).toBeInstanceOf(Date);
-    expect(stored?.emailVerifiedAt?.toISOString()).not.toBe(
-      suppliedVerificationDate,
-    );
+    // verification comes ONLY from completing the signup OTP - a client
+    // supplied timestamp must never land
+    expect(stored?.emailVerifiedAt).toBeUndefined();
     expect(stored?.toObject()).not.toHaveProperty('isAdmin');
   });
 });

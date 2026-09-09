@@ -33,31 +33,39 @@ OTP mechanics (server-enforced, current defaults):
 | Resend cooldown | 60 s; resending **rotates** the code (old one dies) and does NOT extend expiry or reset the budget |
 | One live challenge | Starting a new challenge for the same purpose burns the previous one |
 
-## 1. Register — no OTP today
+## 1. Register — OTP-gated
 
 ```
 POST /api/auth/register
 { "name": "Dwallo Elias", "email": "user@example.com", "password": "..." }
-→ 201 { user, tokens }          // session envelope, signed in immediately
-→ 409 email_taken
+→ 201 { challenge }             // purpose "signup"; a 6-digit code was emailed
+→ 409 email_taken               // a VERIFIED account owns this address
 ```
 
-> **Flagged gap (not yet decided):** the server currently marks the email
-> verified at registration without proving the mailbox — no signup OTP is
-> sent, even though the OTP machine supports a `signup` purpose. If product
-> decides registration must be OTP-gated, this contract will change to return
-> a challenge envelope here. Build the register screen so a challenge
-> response can be slotted in later (i.e. route both envelope shapes through
-> one handler).
+No session yet: take the user straight to the code-entry screen and complete
+via `POST /otp/verify` (§3), which returns the session envelope with
+`emailVerifiedAt` set.
 
-## 2. Login — no OTP today
+Registering an address held by an **unverified** account is not a conflict —
+the new attempt supersedes the old one (new password, fresh code, old code
+dead). So "I typo'd my password and never got to verify" is fixed by simply
+registering again.
+
+## 2. Login — session for verified accounts, challenge otherwise
 
 ```
 POST /api/auth/login
 { "email": "...", "password": "..." }
-→ 200 { user, tokens }
+→ 200 { user, tokens }          // verified account: signed in
+→ 200 { challenge }             // purpose "login": mailbox never proven - code emailed
 → 401 invalid_credentials       // same error for wrong password AND unknown email, by design
 ```
+
+Branch on the body shape: `tokens` present ⇒ done; `challenge` present ⇒
+code-entry screen, then §3. The challenge case happens for accounts that
+registered but never entered the signup code — verifying heals their
+verification. **Route both register and login responses through one handler
+that accepts either envelope.**
 
 ## 3. Verify / resend a code (all OTP flows land here)
 
@@ -140,7 +148,7 @@ Links live 60 minutes, are single-use, and requesting a new one kills the old.
 - **Codes arrive from** `Tambo <no-reply@tambo-app.com>`. Subjects:
   "Your Tambo sign-in code" (login), "Confirm your Tambo password change",
   "Confirm your new Tambo email address", "Verify your Tambo account"
-  (signup, when enabled), "Reset your Tambo password".
+  (signup), "Reset your Tambo password".
 - **Other Tambo emails users will see** (no app action required, but the app
   copy should set expectations): buddy invites, the theft **first alert**
   ("Tambo alert: <device> may be stolen" — includes IMEIs + last known
