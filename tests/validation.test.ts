@@ -79,10 +79,8 @@ describe('register validation', () => {
 
     expect(res.status).toBe(201);
     const stored = await User.findOne({});
-    expect(stored?.emailVerifiedAt).toBeInstanceOf(Date);
-    expect(stored?.emailVerifiedAt?.toISOString()).not.toBe(
-      suppliedVerificationDate,
-    );
+    // only a verified code sets this - a supplied value must never stick
+    expect(stored?.emailVerifiedAt).toBeUndefined();
     expect(stored?.toObject()).not.toHaveProperty('isAdmin');
   });
 });

@@ -129,6 +129,35 @@ export const createChallenge = async (
 };
 
 /**
+ * Opens a fresh `signup` challenge for a signed-in account whose email was
+ * never proven - a registration whose code was lost, or an account created
+ * while verification was bypassed. Verifying it heals `emailVerifiedAt`
+ * exactly as the registration code would have.
+ */
+export const requestEmailVerification = async (
+  userId: string,
+  userAgent?: string,
+): Promise<ChallengeSummary> => {
+  const user = await User.findById(userId);
+  if (!user) throw AppError.unauthorized();
+
+  if (!user.email) {
+    throw AppError.badRequest(
+      'This account has no email address to verify.',
+      'no_email',
+    );
+  }
+  if (user.emailVerifiedAt) {
+    throw AppError.badRequest(
+      'This email address is already verified.',
+      'email_already_verified',
+    );
+  }
+
+  return createChallenge(user, 'signup', { userAgent });
+};
+
+/**
  * Re-issues the code for a live challenge, cooldown-limited. The code is
  * rotated (never resent verbatim), and rotating resets neither expiry nor the
  * attempt budget - resending must not extend an attacker's window.

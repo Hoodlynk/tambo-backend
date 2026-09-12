@@ -35,31 +35,36 @@ wrong guesses, and are single-use. A new challenge for the same purpose kills
 the previous one.
 
 ```
-change-password ──┐                            ┌─> tokens (password/email applied)
-change-email ──────┴──> challenge ──> POST /otp/verify
-                            │                   └─> 401 wrong/expired code
-                            └─> POST /otp/resend (cooldown-limited)
-register/login ──> credentials accepted ──> user + tokens
+register ─────────────────────────> signup challenge ──┐
+login (email unverified) ── 403 ──> signup challenge ──┤
+verify-email 🔒 ──────────────────> signup challenge ──┤
+change-password 🔒 ┐                                   ├──> POST /otp/verify ──┬─> user + tokens (email verified /
+change-email 🔒 ───┴──> challenge ─────────────────────┘        │              │   password/email applied)
+                                                                │              └─> 401 wrong/expired code
+                                                                └─> POST /otp/resend (cooldown-limited)
+login (email verified) ──> credentials accepted ──> user + tokens
 ```
 
 ---
 
 ## POST /register
 
-Creates the account, marks its email as verified without sending a verification
-code, and starts the first session immediately. Email ownership verification is
-currently bypassed in every environment.
+Creates the account with its email **unverified** and opens a `signup`
+challenge whose code is emailed to the new address. **No session is issued** —
+the first token pair comes from `POST /otp/verify`, which also sets
+`emailVerifiedAt`. Until then the account cannot log in (see `/login`). A lost
+code is recovered with `POST /otp/resend`, or by logging in again, which
+issues a fresh challenge.
 
 ```json
 { "name": "Ada Lovelace", "email": "ada@tambo.app", "password": "8+ chars, at most 72 bytes" }
 ```
 
-`201` → user and token pair:
+`201` → challenge only:
 
 ```json
 {
-  "user": { "_id": "...", "name": "Ada Lovelace", "email": "ada@tambo.app", "role": "user", "emailVerifiedAt": "..." },
-  "tokens": { "accessToken": "eyJ...", "refreshToken": "9f3c...", "expiresIn": "15m" }
+  "challenge": { "challengeId": "665f...", "purpose": "signup", "expiresInMinutes": 10 }
 }
 ```
 
@@ -73,8 +78,12 @@ Unknown keys are stripped, so posting `"role": "admin"` does nothing.
 
 ## POST /login
 
-A correct email and password starts a session directly. Login does not require
-an email verification timestamp.
+A correct email and password starts a session directly — **for a verified
+email**. An account that never completed its signup code gets no session:
+the password is still checked first, then a fresh `signup` challenge is
+returned inside a `403 email_unverified` error so the client can send the
+user straight to the code screen. Verifying it completes the signup and
+returns the token pair.
 
 ```json
 { "email": "ada@tambo.app", "password": "..." }
@@ -84,14 +93,25 @@ an email verification timestamp.
 
 ```json
 {
-  "user": { "_id": "...", "name": "Ada Lovelace", "email": "ada@tambo.app", "role": "user" },
+  "user": { "_id": "...", "name": "Ada Lovelace", "email": "ada@tambo.app", "role": "user", "emailVerifiedAt": "..." },
   "tokens": { "accessToken": "eyJ...", "refreshToken": "9f3c...", "expiresIn": "15m" }
+}
+```
+
+`403` (`email_unverified`) → the standard error envelope plus a challenge:
+
+```json
+{
+  "code": "email_unverified",
+  "message": "Verify your email address to finish signing up.",
+  "challenge": { "challengeId": "665f...", "purpose": "signup", "expiresInMinutes": 10 }
 }
 ```
 
 | Code | Status | Meaning |
 |---|---|---|
 | `invalid_credentials` | 401 | Wrong password **or** unknown email — deliberately indistinguishable |
+| `email_unverified` | 403 | Password correct, signup code never verified; `challenge` included |
 | `rate_limited` | 429 | 5 per 15 min per email+IP |
 
 ## POST /otp/verify
@@ -106,6 +126,7 @@ Completes whichever flow opened the challenge.
 
 | Purpose | On verify |
 |---|---|
+| `signup` | `emailVerifiedAt` set; buddy invites waiting on the address bound; the account's **first** session issued |
 | `password_change` | New password applied; **every other session and reset link revoked**; fresh session issued |
 | `email_change` | Email updated + verified; **every other session and reset link revoked**; fresh session issued |
 
@@ -226,9 +247,27 @@ fresh pair. The old address can no longer log in.
 | `email_unchanged` | 400 | Same address as current |
 | `email_taken` | 409 | Address belongs to another account |
 
+## POST /verify-email 🔒
+
+No body. Opens a `signup` challenge for the caller's own address. Since a
+session is only ever issued to a verified email, this only applies to a
+session that predates that rule (an account still holding tokens while
+`GET /me` shows no `emailVerifiedAt`) — clients should surface it then. Any
+earlier `signup` challenge is superseded. An account with no session at all
+recovers a lost code via `POST /otp/resend` or by logging in again.
+
+`200` → `signup` challenge envelope.
+
+| Code | Status | Meaning |
+|---|---|---|
+| `email_already_verified` | 400 | Nothing to do |
+| `no_email` | 400 | Account has no email address (a future phone-only account) |
+| `rate_limited` | 429 | 6 per 10 min per IP |
+
 ## GET /me 🔒
 
-`200` → `{ "user": { ... } }` — includes `emailVerifiedAt`.
+`200` → `{ "user": { ... } }` — includes `emailVerifiedAt`, absent until the
+signup code (or a later `/verify-email` code) has been verified.
 
 ## POST /logout-all 🔒
 
@@ -274,13 +313,13 @@ balancer at this.
 | Code | Status |
 |---|---|
 | `validation_error`, `invalid_json` | 400 |
-| `no_password_credential`, `email_unchanged` | 400 |
+| `no_password_credential`, `email_unchanged`, `email_already_verified`, `no_email` | 400 |
 | `unauthorized`, `missing_token`, `invalid_token`, `token_expired` | 401 |
 | `invalid_credentials` | 401 |
 | `invalid_otp`, `otp_attempts_exceeded`, `invalid_challenge` | 401 |
 | `invalid_refresh_token`, `refresh_token_reused` | 401 |
 | `invalid_reset_token` | 401 |
-| `forbidden` | 403 |
+| `forbidden`, `email_unverified` | 403 |
 | `route_not_found`, `user_not_found`, `session_not_found` | 404 |
 | `email_taken`, `duplicate_key` | 409 |
 | `payload_too_large` | 413 |

@@ -25,6 +25,8 @@ export const rateLimits = {
   otpVerify: { limit: 15, windowSeconds: 15 * 60 },
   /** Mailbox flooding via resend. Keyed on IP; per-challenge cooldown on top. */
   otpResend: { limit: 6, windowSeconds: 10 * 60 },
+  /** Fresh verification challenges for a signed-in, unverified account. Keyed on IP. */
+  verifyEmail: { limit: 6, windowSeconds: 10 * 60 },
   /** Buddy invites email a person; keep Tambo from pestering a mailbox. */
   buddyInvite: { limit: 5, windowSeconds: 60 * 60 },
   /** Evidence batches. Keyed per device; a live trail is bursty but small. */

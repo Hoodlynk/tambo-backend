@@ -43,8 +43,9 @@ const sendChallenge = (
 
 // --- Credential entry points -------------------------------------------------
 
+/** No tokens yet: the client's next move is POST /auth/otp/verify. */
 export const register = async (req: Request, res: Response): Promise<void> => {
-  sendAuthResult(
+  sendChallenge(
     res,
     await passwordCredential.register(
       req.body as RegisterInput,
@@ -55,10 +56,23 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 };
 
 export const login = async (req: Request, res: Response): Promise<void> => {
-  sendAuthResult(
-    res,
-    await passwordCredential.login(req.body as LoginInput, userAgentOf(req)),
+  const result = await passwordCredential.login(
+    req.body as LoginInput,
+    userAgentOf(req),
   );
+
+  if (result.status === 'verification_required') {
+    // The standard error envelope (branch on `code`), plus the challenge that
+    // completes the signup - AppError has no payload slot, so shaped here.
+    res.status(403).json({
+      code: 'email_unverified',
+      message: 'Verify your email address to finish signing up.',
+      challenge: result.challenge,
+    });
+    return;
+  }
+
+  sendAuthResult(res, result.session);
 };
 
 export const changePassword = async (
@@ -84,6 +98,19 @@ export const changeEmail = async (
     await passwordCredential.changeEmail(
       authContext(req).userId,
       req.body as ChangeEmailInput,
+      userAgentOf(req),
+    ),
+  );
+};
+
+export const requestEmailVerification = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  sendChallenge(
+    res,
+    await otpService.requestEmailVerification(
+      authContext(req).userId,
       userAgentOf(req),
     ),
   );

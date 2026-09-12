@@ -2,8 +2,6 @@ import request from 'supertest';
 import { testServer } from '../setup/testServer';
 import { noopMailer } from '../../src/services/mailer/noop.mailer';
 import { retryPhantom } from './http';
-import User from '../../src/models/user.model';
-import * as otpService from '../../src/services/otp.service';
 
 export const CREDENTIALS = {
   name: 'Ada Lovelace',
@@ -34,21 +32,19 @@ export const verifyOtp = (challengeId: string, code: string) =>
     .post('/api/auth/otp/verify')
     .send({ challengeId, code });
 
-/** Returns the raw registration response. */
+/** Returns the raw registration response: a `signup` challenge, no tokens. */
 export const startRegister = (overrides: Partial<typeof CREDENTIALS> = {}) =>
   request(testServer())
     .post('/api/auth/register')
     .send({ ...CREDENTIALS, ...overrides });
 
+/** A live `signup` challenge for the default user, with its code captured. */
 export const startSignupChallenge = async () => {
   const registration = await startRegister();
-  const user = await User.findOne({ email: EMAIL });
-  if (registration.status !== 201 || !user) {
+  if (registration.status !== 201) {
     throw new Error('could not create signup challenge fixture');
   }
-  return {
-    body: { challenge: await otpService.createChallenge(user, 'signup') },
-  };
+  return registration;
 };
 
 /** Returns the raw login response. */
@@ -57,7 +53,7 @@ export const startLogin = (
   password = CREDENTIALS.password,
 ) => request(testServer()).post('/api/auth/login').send({ email, password });
 
-/** Full signup. Returns the session issued by registration. */
+/** Full signup: register, then verify the emailed code. Returns the first session. */
 export const registerUser = async (
   overrides: Partial<typeof CREDENTIALS> = {},
 ): Promise<Registered> => {
@@ -68,10 +64,20 @@ export const registerUser = async (
     );
   }
 
+  const verified = await retryPhantom(
+    () => verifyOtp(res.body.challenge.challengeId, latestOtpCode()),
+    'verify signup code',
+  );
+  if (verified.status !== 200) {
+    throw new Error(
+      `registerUser failed at verify: ${verified.status} ${JSON.stringify(verified.body)}`,
+    );
+  }
+
   return {
-    accessToken: res.body.tokens.accessToken,
-    refreshToken: res.body.tokens.refreshToken,
-    userId: res.body.user._id,
+    accessToken: verified.body.tokens.accessToken,
+    refreshToken: verified.body.tokens.refreshToken,
+    userId: verified.body.user._id,
   };
 };
 

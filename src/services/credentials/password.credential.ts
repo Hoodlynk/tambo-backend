@@ -7,7 +7,6 @@ import { AppError } from '../../utils/appError';
 import { isDuplicateKeyError } from '../../utils/mongoErrors';
 import { generateOpaqueToken, hashOpaqueToken } from '../../utils/tokens';
 import { mailer } from '../mailer';
-import * as buddyService from '../buddy.service';
 import * as otpService from '../otp.service';
 import type { ChallengeSummary } from '../otp.service';
 import * as sessionService from '../session.service';
@@ -65,11 +64,17 @@ const setPassword = async (user: IUser, newPassword: string): Promise<void> => {
   ]);
 };
 
-/** Creates an account and starts its first session immediately. */
+/**
+ * Creates the (unverified) account and opens a `signup` challenge. No session
+ * is issued here: the first token pair only exists once the emailed code has
+ * proven the mailbox (otp.service applies `emailVerifiedAt`, binds any buddy
+ * invites waiting on the address, and starts the session). A lost code is
+ * recovered with /otp/resend, or by logging in again - see `login`.
+ */
 export const register = async (
   input: RegisterInput,
   userAgent?: string,
-): Promise<AuthResult> => {
+): Promise<ChallengeSummary> => {
   // No exists() pre-check: the unique index is the authority, and translating
   // its violation avoids the race where two concurrent registrations both pass
   // a pre-check and the loser surfaces as a 500.
@@ -79,7 +84,6 @@ export const register = async (
       name: input.name,
       email: input.email,
       passwordHash: await hashPassword(input.password),
-      emailVerifiedAt: new Date(),
     });
   } catch (error) {
     if (isDuplicateKeyError(error)) {
@@ -91,15 +95,23 @@ export const register = async (
     throw error;
   }
 
-  await buddyService.bindPendingInvites(user);
-  return { user, tokens: await sessionService.startSession(user, userAgent) };
+  return otpService.createChallenge(user, 'signup', { userAgent });
 };
 
-/** Password login; starts a session immediately. */
+/**
+ * A correct password yields a session - unless the account never completed
+ * its signup verification, in which case it yields a fresh `signup` challenge
+ * instead, so the user can finish verifying and get their first session.
+ */
+export type LoginResult =
+  | { status: 'authenticated'; session: AuthResult }
+  | { status: 'verification_required'; challenge: ChallengeSummary };
+
+/** Password login; a session is only ever started for a verified email. */
 export const login = async (
   input: LoginInput,
   userAgent?: string,
-): Promise<AuthResult> => {
+): Promise<LoginResult> => {
   const user = await User.findOne({ email: input.email }).select(
     '+passwordHash',
   );
@@ -117,7 +129,24 @@ export const login = async (
     );
   }
 
-  return { user, tokens: await sessionService.startSession(user, userAgent) };
+  // The password checked out, but the mailbox never did: no session. Only
+  // reached after a correct password, so this is not an existence oracle.
+  if (!user.emailVerifiedAt) {
+    return {
+      status: 'verification_required',
+      challenge: await otpService.createChallenge(user, 'signup', {
+        userAgent,
+      }),
+    };
+  }
+
+  return {
+    status: 'authenticated',
+    session: {
+      user,
+      tokens: await sessionService.startSession(user, userAgent),
+    },
+  };
 };
 
 /**
