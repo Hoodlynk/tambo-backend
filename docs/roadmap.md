@@ -4,8 +4,18 @@ The single source of truth for where the backend is and what comes next.
 Last updated: 2026-09-13.
 
 **Active program (approved 2026-09-13)**: depth-first client-readiness &
-completion plan — Phase 0 API contract (✅ below) → 1 PWA cookie auth →
+completion plan — Phase 0 API contract (✅) → 1 PWA cookie auth (✅) →
 2 FCM push → 3 entitlements → 4 observability → 5 CI → 6 onboarding docs.
+
+### ✅ Phase 1 — Browser-safe (PWA) auth surface (2026-09-13)
+`/api/auth/web/{login,otp/verify,refresh,logout}`: refresh token in an
+httpOnly `Secure; SameSite=lax; Path=/api/auth/web` cookie (never in the
+body), access token in-memory client-side. CSRF: required `X-Tambo-Csrf`
+header + Origin-vs-allowlist check (`csrf_rejected` 403); CORS `credentials`
+enabled only when `CORS_ALLOWED_ORIGINS` is non-empty. `session.service`
+untouched - one session machinery across both surfaces (tested cross-surface),
+shared rate-limit budgets, cookie-flag misconfigurations refuse to boot.
+In the OpenAPI spec under the "Auth (web)" tag.
 
 Legend: ✅ done & tested · 🔶 partially done · ⬜ not started · 👤 needs a human action
 

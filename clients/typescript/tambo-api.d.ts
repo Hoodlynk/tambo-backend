@@ -253,6 +253,365 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/web/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * PWA login: session cookie set, or an OTP challenge
+         * @description Same branching as /auth/login. On success the refresh token is set as an httpOnly cookie and the body carries only { user, tokens: { accessToken, expiresIn } }.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description CSRF guard for the cookie surface; any value (e.g. "1"). A cross-site page cannot set custom headers without a CORS preflight, which the origin allowlist rejects. */
+                    "X-Tambo-Csrf": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @description Normalized to lowercase; uniqueness is case-insensitive. */
+                        email: string;
+                        password: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Either { user, tokens } (cookie set) or { challenge }. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            user: {
+                                _id: string;
+                                name: string;
+                                email?: string;
+                                phone?: string;
+                                /** @enum {string} */
+                                role: "user" | "admin";
+                                /** @description ISO-8601 timestamp */
+                                emailVerifiedAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                phoneVerifiedAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                                /** @description ISO-8601 timestamp */
+                                updatedAt: string;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                            tokens: {
+                                /** @description Hold in memory only - never in storage. */
+                                accessToken: string;
+                                expiresIn: string;
+                            };
+                        } | {
+                            challenge: {
+                                challengeId: string;
+                                /** @enum {string} */
+                                purpose: "signup" | "login" | "password_change" | "email_change";
+                                expiresInMinutes: number;
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_credentials` */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `csrf_rejected` */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/web/otp/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete a challenge; the session cookie is set */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description CSRF guard for the cookie surface; any value (e.g. "1"). A cross-site page cannot set custom headers without a CORS preflight, which the origin allowlist rejects. */
+                    "X-Tambo-Csrf": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        challengeId: string;
+                        code: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Verified; cookie set. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            user: {
+                                _id: string;
+                                name: string;
+                                email?: string;
+                                phone?: string;
+                                /** @enum {string} */
+                                role: "user" | "admin";
+                                /** @description ISO-8601 timestamp */
+                                emailVerifiedAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                phoneVerifiedAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                                /** @description ISO-8601 timestamp */
+                                updatedAt: string;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                            tokens: {
+                                /** @description Hold in memory only - never in storage. */
+                                accessToken: string;
+                                expiresIn: string;
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_otp` · `otp_attempts_exceeded` · `invalid_challenge` */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `csrf_rejected` */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/web/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate the session using the cookie (no body) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description CSRF guard for the cookie surface; any value (e.g. "1"). A cross-site page cannot set custom headers without a CORS preflight, which the origin allowlist rejects. */
+                    "X-Tambo-Csrf": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Rotated; new cookie set. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            user: {
+                                _id: string;
+                                name: string;
+                                email?: string;
+                                phone?: string;
+                                /** @enum {string} */
+                                role: "user" | "admin";
+                                /** @description ISO-8601 timestamp */
+                                emailVerifiedAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                phoneVerifiedAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                                /** @description ISO-8601 timestamp */
+                                updatedAt: string;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                            tokens: {
+                                /** @description Hold in memory only - never in storage. */
+                                accessToken: string;
+                                expiresIn: string;
+                            };
+                        };
+                    };
+                };
+                /** @description `missing_refresh_cookie` · `invalid_refresh_token` · `refresh_token_reused` */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `csrf_rejected` */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/web/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke the cookie session and clear the cookie (idempotent) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description CSRF guard for the cookie surface; any value (e.g. "1"). A cross-site page cannot set custom headers without a CORS preflight, which the origin allowlist rejects. */
+                    "X-Tambo-Csrf": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Cookie cleared. */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `csrf_rejected` */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/otp/verify": {
         parameters: {
             query?: never;

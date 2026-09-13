@@ -56,6 +56,15 @@ export const tokens = z.object({
 
 export const authResponse = z.object({ user, tokens });
 
+/** The web (PWA) surface: refresh token travels in an httpOnly cookie, not here. */
+export const webAuthResponse = z.object({
+  user,
+  tokens: z.object({
+    accessToken: z.string().describe('Hold in memory only - never in storage.'),
+    expiresIn: z.string(),
+  }),
+});
+
 export const challenge = z.object({
   challengeId: objectId,
   purpose: z.enum(['signup', 'login', 'password_change', 'email_change']),

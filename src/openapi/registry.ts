@@ -111,6 +111,15 @@ const deviceTokenHeader = {
   required: true,
 };
 
+const csrfHeader = {
+  name: 'X-Tambo-Csrf',
+  description:
+    'CSRF guard for the cookie surface; any value (e.g. "1"). A cross-site ' +
+    'page cannot set custom headers without a CORS preflight, which the ' +
+    'origin allowlist rejects.',
+  required: true,
+};
+
 export const endpoints: Endpoint[] = [
   // --- Health ----------------------------------------------------------------
   {
@@ -181,6 +190,80 @@ export const endpoints: Endpoint[] = [
       rateLimited,
     ],
   },
+
+  // --- Auth: the browser (PWA) surface ------------------------------------------
+  // The refresh token lives in an httpOnly cookie scoped to /api/auth/web;
+  // every route requires the X-Tambo-Csrf header (any value) and, from a
+  // browser, an Origin on the CORS allowlist. Register/forgot/reset are shared
+  // with the main auth surface.
+  ...(['login', 'otp/verify', 'refresh', 'logout'] as const).map(
+    (leaf): Endpoint => {
+      const base: Record<typeof leaf, Omit<Endpoint, 'method' | 'path'>> = {
+        login: {
+          tag: 'Auth (web)',
+          summary: 'PWA login: session cookie set, or an OTP challenge',
+          description:
+            'Same branching as /auth/login. On success the refresh token is ' +
+            'set as an httpOnly cookie and the body carries only ' +
+            '{ user, tokens: { accessToken, expiresIn } }.',
+          request: { body: loginSchema, headers: [csrfHeader] },
+          responses: [
+            {
+              status: 200,
+              description:
+                'Either { user, tokens } (cookie set) or { challenge }.',
+              schema: r.webAuthResponse.or(r.challengeResponse),
+            },
+          ],
+          errors: [
+            validationError,
+            { status: 401, code: 'invalid_credentials' },
+            { status: 403, code: 'csrf_rejected' },
+            rateLimited,
+          ],
+        },
+        'otp/verify': {
+          tag: 'Auth (web)',
+          summary: 'Complete a challenge; the session cookie is set',
+          request: { body: otpVerifySchema, headers: [csrfHeader] },
+          responses: [
+            { status: 200, description: 'Verified; cookie set.', schema: r.webAuthResponse },
+          ],
+          errors: [
+            validationError,
+            { status: 401, code: 'invalid_otp' },
+            { status: 401, code: 'otp_attempts_exceeded' },
+            { status: 401, code: 'invalid_challenge' },
+            { status: 403, code: 'csrf_rejected' },
+            rateLimited,
+          ],
+        },
+        refresh: {
+          tag: 'Auth (web)',
+          summary: 'Rotate the session using the cookie (no body)',
+          request: { headers: [csrfHeader] },
+          responses: [
+            { status: 200, description: 'Rotated; new cookie set.', schema: r.webAuthResponse },
+          ],
+          errors: [
+            { status: 401, code: 'missing_refresh_cookie' },
+            { status: 401, code: 'invalid_refresh_token' },
+            { status: 401, code: 'refresh_token_reused' },
+            { status: 403, code: 'csrf_rejected' },
+            rateLimited,
+          ],
+        },
+        logout: {
+          tag: 'Auth (web)',
+          summary: 'Revoke the cookie session and clear the cookie (idempotent)',
+          request: { headers: [csrfHeader] },
+          responses: [{ status: 204, description: 'Cookie cleared.' }],
+          errors: [{ status: 403, code: 'csrf_rejected' }],
+        },
+      };
+      return { method: 'post', path: `/api/auth/web/${leaf}`, ...base[leaf] };
+    },
+  ),
 
   // --- Auth: OTP completion ---------------------------------------------------------
   {

@@ -284,6 +284,29 @@ balancer at this.
 { "status": "ok", "database": "connected", "uptime": 42, "timestamp": "..." }
 ```
 
+## The web (PWA) surface — `/api/auth/web/*`
+
+Browsers must not hold refresh tokens where page scripts can read them, so the
+PWA uses a parallel surface where the refresh token is an **httpOnly cookie**
+(`Secure; SameSite=lax; Path=/api/auth/web`, name `AUTH_COOKIE_NAME`). The
+access token still arrives in the body — hold it **in memory only**. Same
+services, same rotation/reuse-burning, same rate-limit budgets as the mobile
+surface; a token issued on one surface is valid on the other.
+
+| Route | Body | Notes |
+|---|---|---|
+| `POST /api/auth/web/login` | `{ email, password }` | 200 `{ user, tokens: { accessToken, expiresIn } }` + cookie, or `{ challenge }` (no cookie) |
+| `POST /api/auth/web/otp/verify` | `{ challengeId, code }` | completes any challenge; sets the cookie |
+| `POST /api/auth/web/refresh` | — | cookie in, rotated cookie out; `missing_refresh_cookie` (401) without it |
+| `POST /api/auth/web/logout` | — | revokes + clears the cookie; idempotent 204 |
+
+**Every request needs**: the `X-Tambo-Csrf` header (any value — it forces a
+CORS preflight, which the origin allowlist rejects for foreign origins;
+missing/foreign-origin ⇒ 403 `csrf_rejected`), and `credentials: 'include'`
+on the fetch. The PWA's origin must be listed in `CORS_ALLOWED_ORIGINS`.
+Register, forgot-password and reset-password have no cookie involvement — use
+the shared `/api/auth` routes.
+
 ## Error code index
 
 | Code | Status |

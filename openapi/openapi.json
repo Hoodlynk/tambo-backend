@@ -18,6 +18,10 @@
       "name": "Auth"
     },
     {
+      "name": "Auth (web)",
+      "description": "The PWA session surface: refresh token in an httpOnly cookie (path /api/auth/web), X-Tambo-Csrf header required, fetch with credentials: \"include\". Access token stays in memory."
+    },
+    {
       "name": "Devices"
     },
     {
@@ -419,6 +423,555 @@
           },
           "429": {
             "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/auth/web/login": {
+      "post": {
+        "tags": [
+          "Auth (web)"
+        ],
+        "summary": "PWA login: session cookie set, or an OTP challenge",
+        "description": "Same branching as /auth/login. On success the refresh token is set as an httpOnly cookie and the body carries only { user, tokens: { accessToken, expiresIn } }.",
+        "parameters": [
+          {
+            "name": "X-Tambo-Csrf",
+            "in": "header",
+            "required": true,
+            "description": "CSRF guard for the cookie surface; any value (e.g. \"1\"). A cross-site page cannot set custom headers without a CORS preflight, which the origin allowlist rejects.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "description": "Normalized to lowercase; uniqueness is case-insensitive.",
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "email",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Either { user, tokens } (cookie set) or { challenge }.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "user": {
+                          "type": "object",
+                          "properties": {
+                            "_id": {
+                              "type": "string",
+                              "pattern": "^[a-f\\d]{24}$"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "phone": {
+                              "type": "string"
+                            },
+                            "role": {
+                              "type": "string",
+                              "enum": [
+                                "user",
+                                "admin"
+                              ]
+                            },
+                            "emailVerifiedAt": {
+                              "type": "string",
+                              "description": "ISO-8601 timestamp"
+                            },
+                            "phoneVerifiedAt": {
+                              "type": "string",
+                              "description": "ISO-8601 timestamp"
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "description": "ISO-8601 timestamp"
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "description": "ISO-8601 timestamp"
+                            }
+                          },
+                          "required": [
+                            "_id",
+                            "name",
+                            "role",
+                            "createdAt",
+                            "updatedAt"
+                          ],
+                          "additionalProperties": {}
+                        },
+                        "tokens": {
+                          "type": "object",
+                          "properties": {
+                            "accessToken": {
+                              "type": "string",
+                              "description": "Hold in memory only - never in storage."
+                            },
+                            "expiresIn": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "accessToken",
+                            "expiresIn"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "user",
+                        "tokens"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "challenge": {
+                          "type": "object",
+                          "properties": {
+                            "challengeId": {
+                              "type": "string",
+                              "pattern": "^[a-f\\d]{24}$"
+                            },
+                            "purpose": {
+                              "type": "string",
+                              "enum": [
+                                "signup",
+                                "login",
+                                "password_change",
+                                "email_change"
+                              ]
+                            },
+                            "expiresInMinutes": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "challengeId",
+                            "purpose",
+                            "expiresInMinutes"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "challenge"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_credentials`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf_rejected`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/auth/web/otp/verify": {
+      "post": {
+        "tags": [
+          "Auth (web)"
+        ],
+        "summary": "Complete a challenge; the session cookie is set",
+        "parameters": [
+          {
+            "name": "X-Tambo-Csrf",
+            "in": "header",
+            "required": true,
+            "description": "CSRF guard for the cookie surface; any value (e.g. \"1\"). A cross-site page cannot set custom headers without a CORS preflight, which the origin allowlist rejects.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "challengeId": {
+                    "type": "string",
+                    "pattern": "^[a-f\\d]{24}$"
+                  },
+                  "code": {
+                    "type": "string",
+                    "pattern": "^\\d{6}$"
+                  }
+                },
+                "required": [
+                  "challengeId",
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verified; cookie set.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "phone": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "admin"
+                          ]
+                        },
+                        "emailVerifiedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "phoneVerifiedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "name",
+                        "role",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "tokens": {
+                      "type": "object",
+                      "properties": {
+                        "accessToken": {
+                          "type": "string",
+                          "description": "Hold in memory only - never in storage."
+                        },
+                        "expiresIn": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "accessToken",
+                        "expiresIn"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "user",
+                    "tokens"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_otp` · `otp_attempts_exceeded` · `invalid_challenge`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf_rejected`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/auth/web/refresh": {
+      "post": {
+        "tags": [
+          "Auth (web)"
+        ],
+        "summary": "Rotate the session using the cookie (no body)",
+        "parameters": [
+          {
+            "name": "X-Tambo-Csrf",
+            "in": "header",
+            "required": true,
+            "description": "CSRF guard for the cookie surface; any value (e.g. \"1\"). A cross-site page cannot set custom headers without a CORS preflight, which the origin allowlist rejects.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rotated; new cookie set.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "phone": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "admin"
+                          ]
+                        },
+                        "emailVerifiedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "phoneVerifiedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "name",
+                        "role",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "tokens": {
+                      "type": "object",
+                      "properties": {
+                        "accessToken": {
+                          "type": "string",
+                          "description": "Hold in memory only - never in storage."
+                        },
+                        "expiresIn": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "accessToken",
+                        "expiresIn"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "user",
+                    "tokens"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`missing_refresh_cookie` · `invalid_refresh_token` · `refresh_token_reused`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf_rejected`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/auth/web/logout": {
+      "post": {
+        "tags": [
+          "Auth (web)"
+        ],
+        "summary": "Revoke the cookie session and clear the cookie (idempotent)",
+        "parameters": [
+          {
+            "name": "X-Tambo-Csrf",
+            "in": "header",
+            "required": true,
+            "description": "CSRF guard for the cookie surface; any value (e.g. \"1\"). A cross-site page cannot set custom headers without a CORS preflight, which the origin allowlist rejects.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Cookie cleared."
+          },
+          "403": {
+            "description": "`csrf_rejected`",
             "content": {
               "application/json": {
                 "schema": {

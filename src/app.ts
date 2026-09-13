@@ -3,6 +3,7 @@ import express from 'express';
 import helmet from 'helmet';
 import config from './config/config';
 import authRoutes from './routes/auth.routes';
+import authWebRoutes from './routes/auth.web.routes';
 import healthRoutes from './routes/health.routes';
 import openapiRoutes from './routes/openapi.routes';
 import buddyRoutes from './routes/v1/buddy.routes';
@@ -49,7 +50,10 @@ app.use(
       config.cors.allowedOrigins.length > 0
         ? config.cors.allowedOrigins
         : false,
-    credentials: false,
+    // the web auth surface authenticates with an httpOnly cookie, which
+    // browsers only send cross-origin under credentials mode; the explicit
+    // origin allowlist above (never *) is what makes this safe to enable
+    credentials: config.cors.allowedOrigins.length > 0,
   }),
 );
 
@@ -68,6 +72,9 @@ app.use((req, res, next) => {
 // --- Routes ----------------------------------------------------------------
 app.use('/api/health', healthRoutes);
 app.use('/api/openapi.json', openapiRoutes);
+// the browser (PWA) surface must mount BEFORE /api/auth: Express would
+// otherwise route /api/auth/web/* into the mobile router's 404
+app.use('/api/auth/web', authWebRoutes);
 app.use('/api/auth', authRoutes);
 // canonical versioned mount; /api/auth stays as a legacy alias for the
 // pre-OpenAPI mobile builds (same router, so behaviour cannot drift)

@@ -119,6 +119,16 @@ documented property rather than a surprise. Shorten `JWT_ACCESS_TTL` to narrow
 the window; check the database per request if you ever need it to be zero, and
 accept the cost.
 
+## Two session surfaces, one session service
+
+Mobile clients exchange the refresh token in the JSON body; the browser (PWA)
+surface at `/api/auth/web` keeps it in an httpOnly, path-scoped cookie so page
+scripts can never read it, with a CSRF guard (required custom header + Origin
+allowlist check) on every cookie-consuming route. Both surfaces call the same
+`session.service` - rotation, families, and reuse detection are format-agnostic
+- so a session issued on one surface refreshes on the other, and the rate-limit
+budgets are shared. See docs/auth-api.md, "The web (PWA) surface".
+
 ## Credential-agnostic sessions
 
 `session.service.ts` knows nothing about *how* a user proved their identity —

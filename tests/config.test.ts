@@ -13,6 +13,11 @@ const ENV_KEYS = [
   'TRUST_PROXY',
   'MAIL_DRIVER',
   'RESEND_API_KEY',
+  'MONGODB_URI',
+  'PACK_SIGNING_SEED',
+  'AUTH_COOKIE_NAME',
+  'AUTH_COOKIE_SAMESITE',
+  'AUTH_COOKIE_SECURE',
 ] as const;
 
 const originalEnv: Record<string, string | undefined> = {};
@@ -118,5 +123,41 @@ describe('MAIL_DRIVER', () => {
     const config = loadConfig() as { isDevelopment: boolean; nodeEnv: string };
     expect(config.nodeEnv).toBe('development'); // legacy default label
     expect(config.isDevelopment).toBe(false); // but not treated as dev for leaks
+  });
+});
+
+describe('auth cookie config', () => {
+  it('refuses SameSite=none without Secure', () => {
+    process.env.AUTH_COOKIE_SAMESITE = 'none';
+    process.env.AUTH_COOKIE_SECURE = 'false';
+    expect(loadConfig).toThrow(/requires Secure/);
+  });
+
+  it('refuses an unknown SameSite value', () => {
+    process.env.AUTH_COOKIE_SAMESITE = 'sideways';
+    expect(loadConfig).toThrow(/AUTH_COOKIE_SAMESITE must be one of/);
+  });
+
+  it('refuses Secure=false outside development/test', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.JWT_ACCESS_SECRET = 'some-real-secret';
+    process.env.MONGODB_URI = 'mongodb://localhost/x';
+    process.env.PACK_SIGNING_SEED = 'a'.repeat(64);
+    process.env.AUTH_COOKIE_SECURE = 'false';
+    expect(loadConfig).toThrow(/AUTH_COOKIE_SECURE=false is allowed only/);
+  });
+
+  it('defaults to a Lax, Secure cookie named tambo_rt', () => {
+    process.env.AUTH_COOKIE_SAMESITE = '';
+    process.env.AUTH_COOKIE_SECURE = '';
+    process.env.AUTH_COOKIE_NAME = '';
+    const config = loadConfig() as {
+      authCookie: { name: string; sameSite: string; secure: boolean };
+    };
+    expect(config.authCookie).toEqual({
+      name: 'tambo_rt',
+      sameSite: 'lax',
+      secure: true,
+    });
   });
 });

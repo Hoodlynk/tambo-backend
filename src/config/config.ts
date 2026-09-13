@@ -13,6 +13,9 @@ const isLocalEnv = rawNodeEnv === 'development' || rawNodeEnv === 'test';
 const MAIL_DRIVERS = ['console', 'noop', 'resend'] as const;
 type MailDriver = (typeof MAIL_DRIVERS)[number];
 
+const COOKIE_SAMESITE = ['strict', 'lax', 'none'] as const;
+export type CookieSameSite = (typeof COOKIE_SAMESITE)[number];
+
 interface Config {
   port: number;
   nodeEnv: string;
@@ -92,6 +95,17 @@ interface Config {
   cors: {
     /** Empty means "no browser origins allowed" - correct for a mobile-only API. */
     allowedOrigins: string[];
+  };
+  /**
+   * The browser (PWA) auth surface at /api/auth/web keeps the refresh token in
+   * an httpOnly cookie instead of the JSON body, so page scripts can never
+   * read it. Mobile clients are unaffected.
+   */
+  authCookie: {
+    name: string;
+    sameSite: CookieSameSite;
+    /** May be false only in explicit development/test (plain-http localhost). */
+    secure: boolean;
   };
   /**
    * Number of reverse proxies in front of the app. MUST be accurate: too high
@@ -175,6 +189,39 @@ const parsePackSigningSeed = (): string => {
   return value;
 };
 
+/**
+ * Cookie flags fail closed: SameSite=none requires Secure (browsers refuse the
+ * cookie otherwise, which would present as "login works, refresh doesn't"),
+ * and turning Secure off is a development-only concession.
+ */
+const parseAuthCookie = (): Config['authCookie'] => {
+  const rawSameSite = process.env.AUTH_COOKIE_SAMESITE || 'lax';
+  if (!(COOKIE_SAMESITE as readonly string[]).includes(rawSameSite)) {
+    throw new Error(
+      `AUTH_COOKIE_SAMESITE must be one of: ${COOKIE_SAMESITE.join(', ')}; got "${rawSameSite}".`,
+    );
+  }
+  const sameSite = rawSameSite as CookieSameSite;
+
+  const secure = process.env.AUTH_COOKIE_SECURE !== 'false';
+  if (!secure && !isLocalEnv) {
+    throw new Error(
+      'AUTH_COOKIE_SECURE=false is allowed only when NODE_ENV is explicitly development or test.',
+    );
+  }
+  if (sameSite === 'none' && !secure) {
+    throw new Error(
+      'AUTH_COOKIE_SAMESITE=none requires Secure cookies; browsers reject the pair otherwise.',
+    );
+  }
+
+  return {
+    name: process.env.AUTH_COOKIE_NAME || 'tambo_rt',
+    sameSite,
+    secure,
+  };
+};
+
 const config: Config = {
   port: Number(process.env.PORT) || 3000,
   nodeEnv: rawNodeEnv || 'development',
@@ -246,6 +293,7 @@ const config: Config = {
       .map((origin) => origin.trim())
       .filter(Boolean),
   },
+  authCookie: parseAuthCookie(),
   trustProxy: parseTrustProxy(),
 };
 

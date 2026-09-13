@@ -160,6 +160,13 @@ export const buildOpenApiDocument = (): Record<string, unknown> => {
     tags: [
       { name: 'Health' },
       { name: 'Auth' },
+      {
+        name: 'Auth (web)',
+        description:
+          'The PWA session surface: refresh token in an httpOnly cookie ' +
+          '(path /api/auth/web), X-Tambo-Csrf header required, fetch with ' +
+          'credentials: "include". Access token stays in memory.',
+      },
       { name: 'Devices' },
       { name: 'Episodes' },
       { name: 'Evidence', description: 'Device-token auth (X-Device-Token), not user auth.' },
