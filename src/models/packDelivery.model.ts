@@ -4,8 +4,11 @@ import type { Document, Types } from 'mongoose';
 export const DELIVERY_KINDS = ['first_alert', 'full_pack'] as const;
 export type DeliveryKind = (typeof DELIVERY_KINDS)[number];
 
+export const DELIVERY_CHANNELS = ['email', 'push'] as const;
+export type DeliveryChannel = (typeof DELIVERY_CHANNELS)[number];
+
 /**
- * One email dispatched about one episode to one recipient. Two jobs:
+ * One notification dispatched about one episode to one recipient. Two jobs:
  *
  * - first_alert is once-per-recipient-per-episode, enforced by a partial
  *   unique index - the owner marking stolen AND the device threshold firing
@@ -13,6 +16,11 @@ export type DeliveryKind = (typeof DELIVERY_KINDS)[number];
  * - full_pack rows are an audit trail (packs may legitimately be re-sent as
  *   more evidence arrives), and the earliest first_alert row is the
  *   "first-alert time" the pack's incident summary reports.
+ *
+ * `recipient` is an email address for the email channel and `push:<userId>`
+ * for push - the namespacing keeps the existing unique index correct across
+ * channels (one first-alert per human per channel) with NO index migration.
+ * `channel` is denormalized alongside for audit queries, not uniqueness.
  */
 export interface IPackDelivery extends Document<Types.ObjectId> {
   _id: Types.ObjectId;
@@ -20,6 +28,7 @@ export interface IPackDelivery extends Document<Types.ObjectId> {
   episode: Types.ObjectId;
   kind: DeliveryKind;
   recipient: string;
+  channel: DeliveryChannel;
   sentAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -35,6 +44,8 @@ const packDeliverySchema = new Schema<IPackDelivery>(
     },
     kind: { type: String, enum: DELIVERY_KINDS, required: true },
     recipient: { type: String, required: true },
+    // default keeps pre-push rows reading correctly
+    channel: { type: String, enum: DELIVERY_CHANNELS, default: 'email' },
     sentAt: { type: Date, required: true },
   },
   { timestamps: true, toJSON: { versionKey: false } },

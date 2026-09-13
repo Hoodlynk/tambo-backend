@@ -171,6 +171,7 @@ export const buildOpenApiDocument = (): Record<string, unknown> => {
       { name: 'Episodes' },
       { name: 'Evidence', description: 'Device-token auth (X-Device-Token), not user auth.' },
       { name: 'Buddies' },
+      { name: 'Push' },
       { name: 'Familiar locations' },
       { name: 'Legal' },
     ],

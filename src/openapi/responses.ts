@@ -284,6 +284,15 @@ export const familiarLocationsResponse = z.object({
   locations: z.array(familiarLocation),
 });
 
+// --- Push tokens ---------------------------------------------------------------------------
+
+export const pushTokenResponse = z.object({
+  pushToken: z.object({
+    platform: z.enum(['android', 'web', 'ios']),
+    lastSeenAt: isoDate,
+  }),
+});
+
 // --- Legal ------------------------------------------------------------------------------
 
 const legalDoc = z.object({

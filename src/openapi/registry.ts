@@ -35,6 +35,10 @@ import {
   familiarLocationUpdateSchema,
 } from '../validation/familiarLocation.schema';
 import { legalAcceptSchema } from '../validation/legal.schema';
+import {
+  pushTokenRegisterSchema,
+  pushTokenUnregisterSchema,
+} from '../validation/pushToken.schema';
 import * as r from './responses';
 
 /**
@@ -811,6 +815,35 @@ export const endpoints: Endpoint[] = [
     request: { params: familiarLocationIdSchema },
     responses: [{ status: 204, description: 'Deleted.' }],
     errors: [unauthorized, { status: 404, code: 'familiar_location_not_found' }],
+  },
+
+  // --- Push tokens ---------------------------------------------------------------------------------------
+  {
+    method: 'post',
+    path: '/api/v1/push-tokens',
+    tag: 'Push',
+    summary: 'Register this installation for push notifications (upsert)',
+    description:
+      'Call on every app start with the current FCM registration token. ' +
+      'Re-registering is free; registering a token that belonged to another ' +
+      'account reassigns it. Dead tokens are pruned automatically when FCM ' +
+      'reports them.',
+    auth: 'bearer',
+    request: { body: pushTokenRegisterSchema },
+    responses: [
+      { status: 200, description: 'Registered.', schema: r.pushTokenResponse },
+    ],
+    errors: [unauthorized, validationError, rateLimited],
+  },
+  {
+    method: 'delete',
+    path: '/api/v1/push-tokens',
+    tag: 'Push',
+    summary: 'Unregister a token (e.g. on sign-out); idempotent',
+    auth: 'bearer',
+    request: { body: pushTokenUnregisterSchema },
+    responses: [{ status: 204, description: 'Gone (or never existed).' }],
+    errors: [unauthorized, validationError],
   },
 
   // --- Legal -------------------------------------------------------------------------------------------

@@ -35,4 +35,6 @@ export const rateLimits = {
   mediaUpload: { limit: 60, windowSeconds: 60 * 60 },
   /** Full-pack emails fan out to several mailboxes. Keyed on IP. */
   packSend: { limit: 10, windowSeconds: 60 * 60 },
+  /** Push-token registration: apps re-register on start; bots must not churn the registry. */
+  pushTokenRegister: { limit: 30, windowSeconds: 60 * 60 },
 } satisfies Record<string, RateLimitRule>;

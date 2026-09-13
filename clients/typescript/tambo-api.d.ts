@@ -3511,6 +3511,129 @@ export interface paths {
         };
         trace?: never;
     };
+    "/api/v1/push-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register this installation for push notifications (upsert)
+         * @description Call on every app start with the current FCM registration token. Re-registering is free; registering a token that belonged to another account reassigns it. Dead tokens are pruned automatically when FCM reports them.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        token: string;
+                        /** @enum {string} */
+                        platform: "android" | "web" | "ios";
+                    };
+                };
+            };
+            responses: {
+                /** @description Registered. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            pushToken: {
+                                /** @enum {string} */
+                                platform: "android" | "web" | "ios";
+                                /** @description ISO-8601 timestamp */
+                                lastSeenAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        /** Unregister a token (e.g. on sign-out); idempotent */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        token: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Gone (or never existed). */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/legal": {
         parameters: {
             query?: never;

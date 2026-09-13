@@ -15,6 +15,8 @@ const ENV_KEYS = [
   'RESEND_API_KEY',
   'MONGODB_URI',
   'PACK_SIGNING_SEED',
+  'PUSH_DRIVER',
+  'FCM_SERVICE_ACCOUNT_JSON',
   'AUTH_COOKIE_NAME',
   'AUTH_COOKIE_SAMESITE',
   'AUTH_COOKIE_SECURE',
@@ -159,5 +161,29 @@ describe('auth cookie config', () => {
       sameSite: 'lax',
       secure: true,
     });
+  });
+});
+
+describe('PUSH_DRIVER', () => {
+  it('refuses to boot on an unknown driver', () => {
+    process.env.PUSH_DRIVER = 'apns';
+    expect(loadConfig).toThrow(/PUSH_DRIVER must be one of/);
+  });
+
+  it('refuses to boot as fcm without credentials', () => {
+    process.env.PUSH_DRIVER = 'fcm';
+    process.env.FCM_SERVICE_ACCOUNT_JSON = '';
+    expect(loadConfig).toThrow(/FCM_SERVICE_ACCOUNT_JSON must be set/);
+  });
+
+  it('defaults to noop under test, and accepts the known drivers', () => {
+    process.env.PUSH_DRIVER = '';
+    const config = loadConfig() as { push: { driver: string } };
+    expect(config.push.driver).toBe('noop');
+    process.env.FCM_SERVICE_ACCOUNT_JSON = 'eyJmYWtlIjogdHJ1ZX0=';
+    for (const driver of ['console', 'noop', 'fcm']) {
+      process.env.PUSH_DRIVER = driver;
+      expect(loadConfig).not.toThrow();
+    }
   });
 });

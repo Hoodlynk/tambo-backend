@@ -1,23 +1,30 @@
 import type { IDevice } from '../models/device.model';
 import PackDelivery from '../models/packDelivery.model';
+import type { DeliveryChannel, DeliveryKind } from '../models/packDelivery.model';
 import type { ITheftEpisode } from '../models/theftEpisode.model';
 import User from '../models/user.model';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
 import * as buddyService from './buddy.service';
 import { lastKnownLocation, mapsLink } from './evidenceLocation';
 import * as familiarLocationService from './familiarLocation.service';
-import { mailer } from './mailer';
 import type { MailMessage } from './mailer';
+import * as notifier from './notifier.service';
+import type { PushContent } from './notifier.service';
 import { buildPack } from './pack.service';
 import { renderPackPdf } from './pack.pdf';
+import * as pushTokenService from './pushToken.service';
 
 /**
- * Email delivery (the backbone channel - Evidence doc S5.1). WhatsApp is a
- * later, opt-in-gated addition; nothing here assumes it.
+ * Alert delivery: email (the backbone channel - Evidence doc S5.1) plus push
+ * to every registered device of each recipient who is a Tambo user. WhatsApp
+ * is a later, opt-in-gated addition; nothing here assumes it.
  *
  * Recipients: the owner, plus every ACCEPTED buddy. A buddy is a Tambo user who
  * accepted the invitation in-app - that acceptance is the consent, so pending,
  * declined and revoked buddies receive nothing on any channel.
+ *
+ * Push payloads stay minimal (device name + deep link) - notifications land on
+ * lock screens, so IMEIs and locations travel by email and in-app only.
  */
 
 // Only ACCEPTED buddies receive alerts (their in-app accept is the consent);
@@ -29,13 +36,14 @@ const eligibleContactEmails = (userId: string): Promise<string[]> =>
  * Records the send BEFORE dispatching. The partial unique index makes the
  * insert an atomic claim for first_alerts: whoever loses the race (owner
  * mark-stolen vs device threshold, converging on one episode) skips the send,
- * so nobody is ever double-alerted.
+ * so nobody is ever double-alerted. Channels claim independently - a sent
+ * email never suppresses the push, or vice versa.
  */
-const claimAndSend = async (
+const claim = async (
   episode: ITheftEpisode,
-  kind: 'first_alert' | 'full_pack',
+  kind: DeliveryKind,
   recipient: string,
-  message: MailMessage,
+  channel: DeliveryChannel,
 ): Promise<boolean> => {
   try {
     await PackDelivery.create({
@@ -43,18 +51,46 @@ const claimAndSend = async (
       episode: episode._id,
       kind,
       recipient,
+      channel,
       sentAt: new Date(),
     });
+    return true;
   } catch (error) {
     if (isDuplicateKeyError(error)) return false; // already alerted
     throw error;
   }
+};
 
-  // fire-and-forget, the house mail pattern: provider latency or outage must
-  // not block the request that triggered the alert
-  void mailer.send(message).catch((error) => {
-    console.error(`Failed to send ${kind} email to ${recipient}:`, error);
-  });
+const claimAndSend = async (
+  episode: ITheftEpisode,
+  kind: DeliveryKind,
+  recipient: string,
+  message: MailMessage,
+): Promise<boolean> => {
+  if (!(await claim(episode, kind, recipient, 'email'))) return false;
+  // fire-and-forget, the house pattern: provider latency or outage must not
+  // block the request that triggered the alert
+  notifier.sendEmail(message);
+  return true;
+};
+
+/**
+ * One push first-alert per HUMAN per episode: the claim is per user id
+ * (`push:<userId>`), and the send multicasts to all their devices. Users with
+ * no registered tokens are skipped without claiming, so a token registered
+ * later can still receive a pack nudge for a different episode - but a claim,
+ * once made, is final for this episode like the email one.
+ */
+const claimAndPush = async (
+  episode: ITheftEpisode,
+  kind: DeliveryKind,
+  userId: string,
+  content: PushContent,
+): Promise<boolean> => {
+  const tokens = await pushTokenService.activeTokensForUser(userId);
+  if (tokens.length === 0) return false; // email-only recipient
+  if (!(await claim(episode, kind, `push:${userId}`, 'push'))) return false;
+  notifier.sendPush(userId, content);
   return true;
 };
 
@@ -137,6 +173,19 @@ export const sendFirstAlert = async (
       text: bodyFor('there', false),
     });
   }
+
+  // push, claimed per human independently of email; lock-screen-safe payload
+  const push: PushContent = {
+    title: subject,
+    body: `"${device.name}" ${trigger} at ${when}. Open Tambo for the details.`,
+    data: { type: 'first_alert', episodeId: episode._id.toString() },
+  };
+  await claimAndPush(episode, 'first_alert', episode.user.toString(), push);
+  for (const buddyId of await buddyService.activeBuddyUserIds(
+    episode.user.toString(),
+  )) {
+    await claimAndPush(episode, 'first_alert', buddyId, push);
+  }
 };
 
 export interface PackSendResult {
@@ -173,29 +222,51 @@ export const sendPack = async (
       episode: episodeId,
       kind: 'full_pack',
       recipient,
+      channel: 'email',
       sentAt: new Date(),
     });
 
-    void mailer
-      .send({
-        to: recipient,
-        subject: `Tambo evidence pack: ${pack.device.name}`,
-        text: [
-          'Attached is the evidence pack for the theft episode opened at ' +
-            `${pack.episode.openedAt}.`,
-          '',
-          'It contains the incident timeline, failed unlock attempts, the ' +
-            'location trail, device identity (including IMEIs), and a signed ' +
-            'integrity manifest - shaped for a police report, an eCitizen ' +
-            'abstract application, and an insurance claim.',
-          '',
-          'The action checklist inside lists the next steps.',
-        ].join('\n'),
-        attachments: [attachment],
-      })
-      .catch((error) => {
-        console.error(`Failed to send full_pack email to ${recipient}:`, error);
-      });
+    notifier.sendEmail({
+      to: recipient,
+      subject: `Tambo evidence pack: ${pack.device.name}`,
+      text: [
+        'Attached is the evidence pack for the theft episode opened at ' +
+          `${pack.episode.openedAt}.`,
+        '',
+        'It contains the incident timeline, failed unlock attempts, the ' +
+          'location trail, device identity (including IMEIs), and a signed ' +
+          'integrity manifest - shaped for a police report, an eCitizen ' +
+          'abstract application, and an insurance claim.',
+        '',
+        'The action checklist inside lists the next steps.',
+      ].join('\n'),
+      attachments: [attachment],
+    });
+  }
+
+  // push is a NUDGE with a deep link, never the PDF (FCM payloads are ~4KB,
+  // and the pack stays fetchable in-app + attached to the email)
+  const nudge: PushContent = {
+    title: `Evidence pack ready: ${pack.device.name}`,
+    body: 'The signed evidence pack was emailed and is available in the app.',
+    data: { type: 'full_pack', episodeId },
+  };
+  const pushRecipients = [
+    userId,
+    ...(await buddyService.activeBuddyUserIds(userId)),
+  ];
+  for (const recipientId of pushRecipients) {
+    const tokens = await pushTokenService.activeTokensForUser(recipientId);
+    if (tokens.length === 0) continue;
+    await PackDelivery.create({
+      user: userId,
+      episode: episodeId,
+      kind: 'full_pack',
+      recipient: `push:${recipientId}`,
+      channel: 'push',
+      sentAt: new Date(),
+    });
+    notifier.sendPush(recipientId, nudge);
   }
 
   return { recipients };

@@ -16,6 +16,9 @@ type MailDriver = (typeof MAIL_DRIVERS)[number];
 const COOKIE_SAMESITE = ['strict', 'lax', 'none'] as const;
 export type CookieSameSite = (typeof COOKIE_SAMESITE)[number];
 
+const PUSH_DRIVERS = ['console', 'noop', 'fcm'] as const;
+type PushDriver = (typeof PUSH_DRIVERS)[number];
+
 interface Config {
   port: number;
   nodeEnv: string;
@@ -81,6 +84,14 @@ interface Config {
   rateLimit: {
     /** Disable in tests that are not specifically exercising limits. */
     enabled: boolean;
+  };
+  push: {
+    /** 'console' logs to stdout, 'noop' discards; 'fcm' is the real provider. */
+    driver: PushDriver;
+    /** Base64-encoded Firebase service-account JSON; required iff driver=fcm. */
+    fcmServiceAccountJson: string;
+    /** Registered device tokens per user; least-recently-seen evicted beyond it. */
+    maxTokensPerUser: number;
   };
   /**
    * The legal documents users must accept. The content LIVES on the website;
@@ -168,6 +179,22 @@ const parseMailDriver = (): MailDriver => {
     throw new Error('RESEND_API_KEY must be set when MAIL_DRIVER is "resend".');
   }
   return raw as MailDriver;
+};
+
+/** Mirror of parseMailDriver: a typo'd push driver must fail at boot. */
+const parsePushDriver = (): PushDriver => {
+  const raw = process.env.PUSH_DRIVER || (rawNodeEnv === 'test' ? 'noop' : 'console');
+  if (!(PUSH_DRIVERS as readonly string[]).includes(raw)) {
+    throw new Error(
+      `PUSH_DRIVER must be one of: ${PUSH_DRIVERS.join(', ')}; got "${raw}".`,
+    );
+  }
+  if (raw === 'fcm' && !process.env.FCM_SERVICE_ACCOUNT_JSON) {
+    throw new Error(
+      'FCM_SERVICE_ACCOUNT_JSON must be set when PUSH_DRIVER is "fcm".',
+    );
+  }
+  return raw as PushDriver;
 };
 
 /**
@@ -292,6 +319,11 @@ const config: Config = {
       .split(',')
       .map((origin) => origin.trim())
       .filter(Boolean),
+  },
+  push: {
+    driver: parsePushDriver(),
+    fcmServiceAccountJson: process.env.FCM_SERVICE_ACCOUNT_JSON || '',
+    maxTokensPerUser: Number(process.env.PUSH_MAX_TOKENS_PER_USER) || 10,
   },
   authCookie: parseAuthCookie(),
   trustProxy: parseTrustProxy(),

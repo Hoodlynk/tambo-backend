@@ -238,3 +238,17 @@ export const activeBuddyEmails = async (ownerId: string): Promise<string[]> => {
     .map((link) => (link.buddy as unknown as IUser | null)?.email)
     .filter((email): email is string => Boolean(email));
 };
+
+/** User ids of ACCEPTED buddies - the push fan-out (delivery.service). */
+export const activeBuddyUserIds = async (
+  ownerId: string,
+): Promise<string[]> => {
+  const links = await Buddy.find({
+    owner: ownerId,
+    status: 'active',
+    buddy: { $exists: true },
+  }).select('buddy');
+  return links
+    .map((link) => link.buddy?.toString())
+    .filter((id): id is string => Boolean(id));
+};

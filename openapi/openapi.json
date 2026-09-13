@@ -35,6 +35,9 @@
       "name": "Buddies"
     },
     {
+      "name": "Push"
+    },
+    {
       "name": "Familiar locations"
     },
     {
@@ -5339,6 +5342,175 @@
           },
           "404": {
             "description": "`familiar_location_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/push-tokens": {
+      "post": {
+        "tags": [
+          "Push"
+        ],
+        "summary": "Register this installation for push notifications (upsert)",
+        "description": "Call on every app start with the current FCM registration token. Re-registering is free; registering a token that belonged to another account reassigns it. Dead tokens are pruned automatically when FCM reports them.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 4096
+                  },
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "android",
+                      "web",
+                      "ios"
+                    ]
+                  }
+                },
+                "required": [
+                  "token",
+                  "platform"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Registered.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pushToken": {
+                      "type": "object",
+                      "properties": {
+                        "platform": {
+                          "type": "string",
+                          "enum": [
+                            "android",
+                            "web",
+                            "ios"
+                          ]
+                        },
+                        "lastSeenAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        }
+                      },
+                      "required": [
+                        "platform",
+                        "lastSeenAt"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "pushToken"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Push"
+        ],
+        "summary": "Unregister a token (e.g. on sign-out); idempotent",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 4096
+                  }
+                },
+                "required": [
+                  "token"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Gone (or never existed)."
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
             "content": {
               "application/json": {
                 "schema": {

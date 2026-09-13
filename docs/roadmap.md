@@ -5,7 +5,20 @@ Last updated: 2026-09-13.
 
 **Active program (approved 2026-09-13)**: depth-first client-readiness &
 completion plan — Phase 0 API contract (✅) → 1 PWA cookie auth (✅) →
-2 FCM push → 3 entitlements → 4 observability → 5 CI → 6 onboarding docs.
+2 FCM push (✅) → 3 entitlements → 4 observability → 5 CI → 6 onboarding docs.
+
+### ✅ Phase 2 — Push notifications via the Notifier seam (2026-09-13)
+FCM as the single provider (Android + PWA web push + APNs relay), behind a
+driver seam mirroring the mailer (`fcm`/`console`/`noop`, boot-validated).
+Token registry: `POST/DELETE /api/v1/push-tokens` — unique tokens
+reassign-on-upsert across accounts, per-user cap with LRU eviction,
+error-driven pruning when FCM reports a token dead. `notifier.service` is the
+one channel fan-out; `delivery.service` claims per channel independently
+(recipient `push:<userId>` — namespacing keeps the existing unique index, NO
+production index migration). First alert: once per human per channel,
+multicast to all devices, lock-screen-safe payloads (no IMEIs/locations).
+Full pack: push is a deep-link nudge, never the PDF. Human action open:
+create the Firebase project + service account (docs/push-api.md).
 
 ### ✅ Phase 1 — Browser-safe (PWA) auth surface (2026-09-13)
 `/api/auth/web/{login,otp/verify,refresh,logout}`: refresh token in an
