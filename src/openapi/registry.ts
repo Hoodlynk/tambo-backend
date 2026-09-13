@@ -36,6 +36,10 @@ import {
 } from '../validation/familiarLocation.schema';
 import { legalAcceptSchema } from '../validation/legal.schema';
 import {
+  planSetSchema,
+  planUserIdSchema,
+} from '../validation/plan.schema';
+import {
   pushTokenRegisterSchema,
   pushTokenUnregisterSchema,
 } from '../validation/pushToken.schema';
@@ -482,6 +486,13 @@ export const endpoints: Endpoint[] = [
         code: 'legal_acceptance_required',
         description: 'Accept the current terms + privacy first (see /api/v1/legal).',
       },
+      {
+        status: 409,
+        code: 'device_limit',
+        description:
+          "The plan's device allowance is used up (free/pro: 1, family: 5). " +
+          'Already-enrolled devices keep working regardless.',
+      },
     ],
   },
   {
@@ -815,6 +826,36 @@ export const endpoints: Endpoint[] = [
     request: { params: familiarLocationIdSchema },
     responses: [{ status: 204, description: 'Deleted.' }],
     errors: [unauthorized, { status: 404, code: 'familiar_location_not_found' }],
+  },
+
+  // --- Plan ------------------------------------------------------------------------------------------------
+  {
+    method: 'get',
+    path: '/api/v1/plan',
+    tag: 'Plan',
+    summary: "The account's plan and what it unlocks",
+    description:
+      'Backs the Settings "Subscription" row. `effectivePlan` is what is in ' +
+      'force now - a lapsed paid plan reads as free. Entitlements shape reads ' +
+      'and enrolment only; evidence upload is NEVER plan-gated.',
+    auth: 'bearer',
+    responses: [{ status: 200, description: 'OK.', schema: r.planResponse }],
+    errors: [unauthorized],
+  },
+  {
+    method: 'patch',
+    path: '/api/v1/plan/{userId}',
+    tag: 'Plan',
+    summary: "Set a user's plan (admin only; billing webhook takes over later)",
+    auth: 'bearer',
+    request: { params: planUserIdSchema, body: planSetSchema },
+    responses: [{ status: 200, description: 'Updated.', schema: r.planResponse }],
+    errors: [
+      unauthorized,
+      { status: 403, code: 'forbidden', description: 'Not an admin.' },
+      validationError,
+      { status: 404, code: 'user_not_found' },
+    ],
   },
 
   // --- Push tokens ---------------------------------------------------------------------------------------

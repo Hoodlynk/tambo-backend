@@ -4,6 +4,9 @@ import type { Document, Types } from 'mongoose';
 export const USER_ROLES = ['user', 'admin'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
+export const USER_PLANS = ['free', 'pro', 'family'] as const;
+export type UserPlan = (typeof USER_PLANS)[number];
+
 export interface IUser extends Document<Types.ObjectId> {
   _id: Types.ObjectId;
   name: string;
@@ -14,6 +17,14 @@ export interface IUser extends Document<Types.ObjectId> {
   /** Absent for credential-less accounts such as phone-OTP-only users. */
   passwordHash?: string;
   role: UserRole;
+  /**
+   * The subscription tier. What it UNLOCKS is decided in one place -
+   * services/entitlements.ts - never by reading this field directly in a
+   * feature service. `planExpiresAt` absent = never expires (free forever;
+   * a billing webhook sets both). An expired paid plan reads as free.
+   */
+  plan: UserPlan;
+  planExpiresAt?: Date;
   emailVerifiedAt?: Date;
   phoneVerifiedAt?: Date;
   /**
@@ -44,6 +55,8 @@ const userSchema = new Schema<IUser>(
     // never selected by default; the auth service opts in explicitly
     passwordHash: { type: String, select: false },
     role: { type: String, enum: USER_ROLES, default: 'user' },
+    plan: { type: String, enum: USER_PLANS, default: 'free' },
+    planExpiresAt: { type: Date },
     emailVerifiedAt: { type: Date },
     phoneVerifiedAt: { type: Date },
     sessionsInvalidatedAt: { type: Date },

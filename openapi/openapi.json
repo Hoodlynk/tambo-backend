@@ -38,6 +38,9 @@
       "name": "Push"
     },
     {
+      "name": "Plan"
+    },
+    {
       "name": "Familiar locations"
     },
     {
@@ -2355,6 +2358,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "`device_limit` — The plan's device allowance is used up (free/pro: 1, family: 5). Already-enrolled devices keep working regardless.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -4263,6 +4276,10 @@
                     "episodeOpened": {
                       "description": "True when THIS batch crossed the threshold. Start the trail.",
                       "type": "boolean"
+                    },
+                    "trailCadenceSeconds": {
+                      "description": "Advisory TRAIL_POINT interval while an episode is open, tuned to the owner's plan. Advice only - evidence is never refused.",
+                      "type": "number"
                     }
                   },
                   "required": [
@@ -5342,6 +5359,278 @@
           },
           "404": {
             "description": "`familiar_location_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/plan": {
+      "get": {
+        "tags": [
+          "Plan"
+        ],
+        "summary": "The account's plan and what it unlocks",
+        "description": "Backs the Settings \"Subscription\" row. `effectivePlan` is what is in force now - a lapsed paid plan reads as free. Entitlements shape reads and enrolment only; evidence upload is NEVER plan-gated.",
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "plan": {
+                      "type": "object",
+                      "properties": {
+                        "plan": {
+                          "type": "string",
+                          "enum": [
+                            "free",
+                            "pro",
+                            "family"
+                          ]
+                        },
+                        "effectivePlan": {
+                          "type": "string",
+                          "enum": [
+                            "free",
+                            "pro",
+                            "family"
+                          ],
+                          "description": "What is in force NOW (lapsed paid = free)."
+                        },
+                        "expiresAt": {
+                          "nullable": true,
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "entitlements": {
+                          "type": "object",
+                          "properties": {
+                            "maxDevices": {
+                              "type": "number"
+                            },
+                            "historyDays": {
+                              "nullable": true,
+                              "description": "null = full history (bounded only by evidence retention).",
+                              "type": "number"
+                            },
+                            "trailCadenceSeconds": {
+                              "type": "number"
+                            },
+                            "pushAlerts": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "maxDevices",
+                            "historyDays",
+                            "trailCadenceSeconds",
+                            "pushAlerts"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "plan",
+                        "effectivePlan",
+                        "expiresAt",
+                        "entitlements"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "plan"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/plan/{userId}": {
+      "patch": {
+        "tags": [
+          "Plan"
+        ],
+        "summary": "Set a user's plan (admin only; billing webhook takes over later)",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "plan": {
+                    "type": "string",
+                    "enum": [
+                      "free",
+                      "pro",
+                      "family"
+                    ]
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                  }
+                },
+                "required": [
+                  "plan"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "plan": {
+                      "type": "object",
+                      "properties": {
+                        "plan": {
+                          "type": "string",
+                          "enum": [
+                            "free",
+                            "pro",
+                            "family"
+                          ]
+                        },
+                        "effectivePlan": {
+                          "type": "string",
+                          "enum": [
+                            "free",
+                            "pro",
+                            "family"
+                          ],
+                          "description": "What is in force NOW (lapsed paid = free)."
+                        },
+                        "expiresAt": {
+                          "nullable": true,
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "entitlements": {
+                          "type": "object",
+                          "properties": {
+                            "maxDevices": {
+                              "type": "number"
+                            },
+                            "historyDays": {
+                              "nullable": true,
+                              "description": "null = full history (bounded only by evidence retention).",
+                              "type": "number"
+                            },
+                            "trailCadenceSeconds": {
+                              "type": "number"
+                            },
+                            "pushAlerts": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "maxDevices",
+                            "historyDays",
+                            "trailCadenceSeconds",
+                            "pushAlerts"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "plan",
+                        "effectivePlan",
+                        "expiresAt",
+                        "entitlements"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "plan"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`forbidden` — Not an admin.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`user_not_found`",
             "content": {
               "application/json": {
                 "schema": {

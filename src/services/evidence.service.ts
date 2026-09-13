@@ -5,8 +5,10 @@ import EvidenceEnvelope from '../models/evidenceEnvelope.model';
 import type { IEvidenceEnvelope } from '../models/evidenceEnvelope.model';
 import type { ITheftEpisode } from '../models/theftEpisode.model';
 import { AppError } from '../utils/appError';
+import User from '../models/user.model';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
 import { sha256Hex } from '../utils/tokens';
+import { entitlementsFor } from './entitlements';
 import * as episodeService from './episode.service';
 import { parseLocation } from './evidenceLocation';
 import type { EvidenceLocation } from './evidenceLocation';
@@ -34,6 +36,11 @@ export interface IngestResult {
   episodeId?: string;
   /** True when THIS batch crossed the threshold and opened it. */
   episodeOpened?: boolean;
+  /**
+   * Advisory TRAIL_POINT cadence while an episode is open, tuned to the
+   * owner's plan. Advice, not enforcement - evidence is never refused.
+   */
+  trailCadenceSeconds?: number;
 }
 
 const routineExpiry = (): Date =>
@@ -157,20 +164,25 @@ export const ingestBatch = async (
     }
   }
 
+  let episodeOpened = false;
   if (!openEpisode && sawUnlockFailure) {
     openEpisode = await maybeOpenByThreshold(device);
-    if (openEpisode) {
-      return {
-        results,
-        episodeId: openEpisode._id.toString(),
-        episodeOpened: true,
-      };
-    }
+    episodeOpened = openEpisode !== null;
   }
+
+  // plan-tuned ADVISORY only ("how often should I ping?"): entitlements shape
+  // the client's cadence, never whether evidence is accepted
+  const cadence = openEpisode
+    ? (await User.findById(device.user).then((owner) =>
+        owner ? entitlementsFor(owner).trailCadenceSeconds : null,
+      )) ?? undefined
+    : undefined;
 
   return {
     results,
     ...(openEpisode ? { episodeId: openEpisode._id.toString() } : {}),
+    ...(episodeOpened ? { episodeOpened: true } : {}),
+    ...(cadence !== undefined ? { trailCadenceSeconds: cadence } : {}),
   };
 };
 
@@ -286,13 +298,29 @@ export const unlockActivity = async (
     Date.now() - config.evidence.thresholdWindowMinutes * 60 * 1000,
   );
 
+  // the plan bounds how far back the owner's HISTORY view reaches - it never
+  // touches threshold counting (safety) or episode evidence/packs
+  const owner = await User.findById(device.user);
+  const historyDays = owner ? entitlementsFor(owner).historyDays : Infinity;
+  const historyFilter = Number.isFinite(historyDays)
+    ? {
+        receivedAt: {
+          $gte: new Date(Date.now() - historyDays * 24 * 60 * 60 * 1000),
+        },
+      }
+    : {};
+
   const [inWindow, recent] = await Promise.all([
     EvidenceEnvelope.countDocuments({
       device: device._id,
       type: 'UNLOCK_FAILED',
       receivedAt: { $gte: windowStart },
     }),
-    EvidenceEnvelope.find({ device: device._id, type: 'UNLOCK_FAILED' })
+    EvidenceEnvelope.find({
+      device: device._id,
+      type: 'UNLOCK_FAILED',
+      ...historyFilter,
+    })
       .sort({ receivedAt: -1 })
       .limit(limit)
       .select('capturedAt receivedAt payload'),

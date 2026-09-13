@@ -3,6 +3,7 @@ import { testServer } from './setup/testServer';
 import config from '../src/config/config';
 import PackDelivery from '../src/models/packDelivery.model';
 import PushToken from '../src/models/pushToken.model';
+import User from '../src/models/user.model';
 import { noopMailer } from '../src/services/mailer/noop.mailer';
 import { noopPusher } from '../src/services/push/noop.push';
 import { clearTestDb, closeTestDb, connectTestDb } from './helpers/db';
@@ -18,6 +19,10 @@ afterAll(closeTestDb);
 
 const TOKEN_A = 'fcm-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const TOKEN_B = 'fcm-token-bbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+
+/** Push alerts are a paid entitlement; fan-out tests run on a pro account. */
+const upgradeToPro = (userId: string) =>
+  User.updateOne({ _id: userId }, { $set: { plan: 'pro' } });
 
 const registerToken = (accessToken: string, token: string, platform = 'android') =>
   request(testServer())
@@ -129,6 +134,7 @@ describe('POST /api/v1/push-tokens', () => {
 describe('first-alert push fan-out', () => {
   it('claims once per human and multicasts to all their devices', async () => {
     const { accessToken, userId } = await registerUser();
+    await upgradeToPro(userId);
     await registerToken(accessToken, TOKEN_A);
     await registerToken(accessToken, TOKEN_B, 'web');
 
@@ -153,6 +159,7 @@ describe('first-alert push fan-out', () => {
 
   it('email and push claims are independent; converging openers still push once', async () => {
     const { accessToken, userId } = await registerUser();
+    await upgradeToPro(userId);
     await registerToken(accessToken, TOKEN_A);
     const deviceId = await enrolAndSteal(accessToken);
 
@@ -177,7 +184,8 @@ describe('first-alert push fan-out', () => {
   });
 
   it('degrades silently to email-only when the user has no tokens', async () => {
-    const { accessToken } = await registerUser();
+    const { accessToken, userId } = await registerUser();
+    await upgradeToPro(userId);
     await enrolAndSteal(accessToken);
 
     await until(() =>
@@ -189,8 +197,21 @@ describe('first-alert push fan-out', () => {
     ).toBe(0);
   });
 
+  it('never pushes for a free-plan account - real-time alerts are a paid entitlement', async () => {
+    const { accessToken } = await registerUser(); // default plan: free
+    await registerToken(accessToken, TOKEN_A);
+    await enrolAndSteal(accessToken);
+
+    await until(() =>
+      noopMailer.sent.some((mail) => mail.subject.includes('may be stolen')),
+    );
+    expect(noopPusher.sent).toHaveLength(0); // email still went out above
+    expect(await PackDelivery.countDocuments({ channel: 'push' })).toBe(0);
+  });
+
   it('prunes tokens the provider reports dead', async () => {
-    const { accessToken } = await registerUser();
+    const { accessToken, userId } = await registerUser();
+    await upgradeToPro(userId);
     await registerToken(accessToken, TOKEN_A);
     await registerToken(accessToken, TOKEN_B);
     noopPusher.failNext = [TOKEN_B];
@@ -205,6 +226,7 @@ describe('first-alert push fan-out', () => {
 describe('full-pack push nudge', () => {
   it('sends a nudge (no attachment) and records the audit row', async () => {
     const { accessToken, userId } = await registerUser();
+    await upgradeToPro(userId);
     await registerToken(accessToken, TOKEN_A);
     const deviceId = await enrolAndSteal(accessToken);
     await until(() => noopPusher.sent.length >= 1); // drain the first alert

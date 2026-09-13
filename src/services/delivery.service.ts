@@ -5,6 +5,7 @@ import type { ITheftEpisode } from '../models/theftEpisode.model';
 import User from '../models/user.model';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
 import * as buddyService from './buddy.service';
+import { entitlementsFor } from './entitlements';
 import { lastKnownLocation, mapsLink } from './evidenceLocation';
 import * as familiarLocationService from './familiarLocation.service';
 import type { MailMessage } from './mailer';
@@ -174,7 +175,10 @@ export const sendFirstAlert = async (
     });
   }
 
-  // push, claimed per human independently of email; lock-screen-safe payload
+  // push, claimed per human independently of email; lock-screen-safe payload.
+  // Real-time push alerts are a paid entitlement of the PROTECTED account
+  // (the owner's subscription covers their buddies); email always goes out.
+  if (!entitlementsFor(owner).pushAlerts) return;
   const push: PushContent = {
     title: subject,
     body: `"${device.name}" ${trigger} at ${when}. Open Tambo for the details.`,
@@ -245,7 +249,9 @@ export const sendPack = async (
   }
 
   // push is a NUDGE with a deep link, never the PDF (FCM payloads are ~4KB,
-  // and the pack stays fetchable in-app + attached to the email)
+  // and the pack stays fetchable in-app + attached to the email). Gated on
+  // the protected account's plan, like the first alert.
+  if (!owner || !entitlementsFor(owner).pushAlerts) return { recipients };
   const nudge: PushContent = {
     title: `Evidence pack ready: ${pack.device.name}`,
     body: 'The signed evidence pack was emailed and is available in the app.',

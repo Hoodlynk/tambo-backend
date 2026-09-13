@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { testServer } from './setup/testServer';
 import TheftEpisode from '../src/models/theftEpisode.model';
+import User from '../src/models/user.model';
 import { clearTestDb, closeTestDb, connectTestDb } from './helpers/db';
 import { registerUser } from './helpers/factories';
 
@@ -132,7 +133,9 @@ describe('mark-recovered', () => {
 
 describe('episode reads', () => {
   it("lists the caller's episodes, filterable by device", async () => {
-    const { accessToken } = await registerUser();
+    const { accessToken, userId } = await registerUser();
+    // two devices on one account needs a family plan (free allows 1)
+    await User.updateOne({ _id: userId }, { $set: { plan: 'family' } });
     const deviceA = await enrol(accessToken);
     const deviceB = await enrol(accessToken);
     await markStolen(accessToken, deviceA);

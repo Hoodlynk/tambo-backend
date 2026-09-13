@@ -1687,6 +1687,15 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
+                /** @description `device_limit` — The plan's device allowance is used up (free/pro: 1, family: 5). Already-enrolled devices keep working regardless. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
             };
         };
         delete?: never;
@@ -2771,6 +2780,8 @@ export interface paths {
                             episodeId?: string;
                             /** @description True when THIS batch crossed the threshold. Start the trail. */
                             episodeOpened?: boolean;
+                            /** @description Advisory TRAIL_POINT interval while an episode is open, tuned to the owner's plan. Advice only - evidence is never refused. */
+                            trailCadenceSeconds?: number;
                         };
                     };
                 };
@@ -3500,6 +3511,175 @@ export interface paths {
                 };
                 /** @description `familiar_location_exists` */
                 409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The account's plan and what it unlocks
+         * @description Backs the Settings "Subscription" row. `effectivePlan` is what is in force now - a lapsed paid plan reads as free. Entitlements shape reads and enrolment only; evidence upload is NEVER plan-gated.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            plan: {
+                                /** @enum {string} */
+                                plan: "free" | "pro" | "family";
+                                /**
+                                 * @description What is in force NOW (lapsed paid = free).
+                                 * @enum {string}
+                                 */
+                                effectivePlan: "free" | "pro" | "family";
+                                /** @description ISO-8601 timestamp */
+                                expiresAt: string | null;
+                                entitlements: {
+                                    maxDevices: number;
+                                    /** @description null = full history (bounded only by evidence retention). */
+                                    historyDays: number | null;
+                                    trailCadenceSeconds: number;
+                                    pushAlerts: boolean;
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plan/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set a user's plan (admin only; billing webhook takes over later) */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        plan: "free" | "pro" | "family";
+                        /** Format: date-time */
+                        expiresAt?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            plan: {
+                                /** @enum {string} */
+                                plan: "free" | "pro" | "family";
+                                /**
+                                 * @description What is in force NOW (lapsed paid = free).
+                                 * @enum {string}
+                                 */
+                                effectivePlan: "free" | "pro" | "family";
+                                /** @description ISO-8601 timestamp */
+                                expiresAt: string | null;
+                                entitlements: {
+                                    maxDevices: number;
+                                    /** @description null = full history (bounded only by evidence retention). */
+                                    historyDays: number | null;
+                                    trailCadenceSeconds: number;
+                                    pushAlerts: boolean;
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `forbidden` — Not an admin. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `user_not_found` */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };

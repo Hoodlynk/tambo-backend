@@ -16,6 +16,7 @@ reference for your feature.
 | [trail-api.md](trail-api.md) | Location trail, static vs moving, familiar locations (F3) |
 | [legal-api.md](legal-api.md) | T&C / privacy versions, scroll-gated acceptance, the enrolment gate |
 | [push-api.md](push-api.md) | Push-token registry, FCM setup, alert fan-out rules |
+| [plans-api.md](plans-api.md) | Free/Pro/Family entitlements, plan endpoint, enforcement rules |
 | [f1-client-contract.md](f1-client-contract.md) | The Android ↔ backend wire contract for failed-unlock reporting |
 | [client-generation.md](client-generation.md) | Generating typed API clients from the OpenAPI spec |
 | [android-feedback-2026-09-12.md](android-feedback-2026-09-12.md) | Review of the app's auth/terms work — the 3 contract fixes needed |

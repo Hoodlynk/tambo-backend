@@ -1,7 +1,9 @@
 import Device from '../models/device.model';
 import type { IDevice } from '../models/device.model';
 import TheftEpisode from '../models/theftEpisode.model';
+import User from '../models/user.model';
 import { AppError } from '../utils/appError';
+import { entitlementsFor } from './entitlements';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
 import { generateOpaqueToken, hashOpaqueToken } from '../utils/tokens';
 import type {
@@ -33,6 +35,20 @@ export const register = async (
   userId: string,
   input: DeviceInput,
 ): Promise<EnrolledDevice> => {
+  // the plan bounds ENROLMENT only: already-enrolled devices keep protecting
+  // and reporting even if the plan later lapses - never brick mid-theft
+  const owner = await User.findById(userId);
+  if (!owner) throw AppError.unauthorized();
+  const { maxDevices } = entitlementsFor(owner);
+  const enrolled = await Device.countDocuments({ user: userId });
+  if (enrolled >= maxDevices) {
+    throw AppError.conflict(
+      `Your plan allows ${maxDevices} enrolled device${maxDevices === 1 ? '' : 's'}. ` +
+        'Remove a device or upgrade to add another.',
+      'device_limit',
+    );
+  }
+
   const ingestToken = generateOpaqueToken();
 
   const device = await Device.create({

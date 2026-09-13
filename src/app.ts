@@ -13,6 +13,7 @@ import evidenceRoutes from './routes/v1/evidence.routes';
 import episodeRoutes from './routes/v1/episode.routes';
 import familiarLocationRoutes from './routes/v1/familiarLocation.routes';
 import legalRoutes from './routes/v1/legal.routes';
+import planRoutes from './routes/v1/plan.routes';
 import pushTokenRoutes from './routes/v1/pushToken.routes';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler';
 
@@ -88,6 +89,7 @@ app.use('/api/v1/familiar-locations', familiarLocationRoutes);
 app.use('/api/v1/buddy-invites', buddyInviteRoutes);
 app.use('/api/v1/legal', legalRoutes);
 app.use('/api/v1/push-tokens', pushTokenRoutes);
+app.use('/api/v1/plan', planRoutes);
 
 // --- Tail: unmatched routes, then the global error handler -----------------
 app.use(notFoundHandler);

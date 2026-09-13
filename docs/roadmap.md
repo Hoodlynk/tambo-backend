@@ -5,7 +5,18 @@ Last updated: 2026-09-13.
 
 **Active program (approved 2026-09-13)**: depth-first client-readiness &
 completion plan — Phase 0 API contract (✅) → 1 PWA cookie auth (✅) →
-2 FCM push (✅) → 3 entitlements → 4 observability → 5 CI → 6 onboarding docs.
+2 FCM push (✅) → 3 entitlements (✅) → 4 observability → 5 CI → 6 onboarding.
+
+### ✅ Phase 3 — Plans & entitlements (2026-09-13; billing webhook parked as 3b)
+`User.plan` (free/pro/family) + `planExpiresAt`; ONE matrix in
+`services/entitlements.ts` (lapsed paid reads as free). Enforced: device
+enrolment cap (409 `device_limit`; existing devices never brick), activity
+history window (free: 7 days — episode evidence/packs never clamped),
+plan-tuned advisory `trailCadenceSeconds` on ingest responses (evidence never
+refused), push alerts as a paid entitlement of the protected account.
+`GET /api/v1/plan` backs the Settings row; `PATCH /api/v1/plan/:userId`
+(admin) is the manual lever until the Play Billing RTDN webhook (3b, blocked
+on the Play Console service account) calls the same `plan.service.setPlan`.
 
 ### ✅ Phase 2 — Push notifications via the Notifier seam (2026-09-13)
 FCM as the single provider (Android + PWA web push + APNs relay), behind a

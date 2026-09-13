@@ -222,6 +222,13 @@ export const ingestResponse = z.object({
     .boolean()
     .optional()
     .describe('True when THIS batch crossed the threshold. Start the trail.'),
+  trailCadenceSeconds: z
+    .number()
+    .optional()
+    .describe(
+      'Advisory TRAIL_POINT interval while an episode is open, tuned to the ' +
+        "owner's plan. Advice only - evidence is never refused.",
+    ),
 });
 
 export const mediaAckResponse = z.object({
@@ -282,6 +289,27 @@ export const familiarLocation = z.looseObject({
 export const familiarLocationResponse = z.object({ location: familiarLocation });
 export const familiarLocationsResponse = z.object({
   locations: z.array(familiarLocation),
+});
+
+// --- Plan --------------------------------------------------------------------------------
+
+const planName = z.enum(['free', 'pro', 'family']);
+
+export const planResponse = z.object({
+  plan: z.object({
+    plan: planName,
+    effectivePlan: planName.describe('What is in force NOW (lapsed paid = free).'),
+    expiresAt: isoDate.nullable(),
+    entitlements: z.object({
+      maxDevices: z.number(),
+      historyDays: z
+        .number()
+        .nullable()
+        .describe('null = full history (bounded only by evidence retention).'),
+      trailCadenceSeconds: z.number(),
+      pushAlerts: z.boolean(),
+    }),
+  }),
 });
 
 // --- Push tokens ---------------------------------------------------------------------------

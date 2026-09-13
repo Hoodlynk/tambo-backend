@@ -1,9 +1,9 @@
 # Plans / subscriptions scoping — Free, Pro, Family
 
-**Status: scoping only — not built.** The app already ships the Plans screens
-(Free $0, Pro $4.99/mo, Family $9.99/mo); the backend has no plan, entitlement,
-or billing concept. Decision from the 2026-09-09 sprint: scope first, decide,
-then build.
+**Status: entitlements BUILT (2026-09-13) — see [plans-api.md](plans-api.md);
+billing rails still open.** Decision taken 2026-09-13: **Play Billing first**
+(M-PESA only if a direct-sales channel materialises); the webhook build (3b)
+waits on the Play Console service account. Original scoping below.
 
 ## What the screens promise (the entitlement matrix)
 
