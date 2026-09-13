@@ -14,7 +14,7 @@ import * as familiarLocationService from './familiarLocation.service';
 import type { MailMessage } from './mailer';
 import * as notifier from './notifier.service';
 import type { PushContent } from './notifier.service';
-import { buildPack } from './pack.service';
+import { buildPack, getOwnedEpisode } from './pack.service';
 import { renderPackPdf } from './pack.pdf';
 import * as pushTokenService from './pushToken.service';
 
@@ -74,16 +74,18 @@ const claimAndSend = async (
   if (!(await claim(episode, kind, recipient, 'email'))) return false;
   // fire-and-forget, the house pattern: provider latency or outage must not
   // block the request that triggered the alert
-  notifier.sendEmail(message);
+  notifier.sendEmail(message, kind);
   return true;
 };
 
 /**
- * One push first-alert per HUMAN per episode: the claim is per user id
- * (`push:<userId>`), and the send multicasts to all their devices. Users with
- * no registered tokens are skipped without claiming, so a token registered
- * later can still receive a pack nudge for a different episode - but a claim,
- * once made, is final for this episode like the email one.
+ * One push per HUMAN per episode per kind: the claim is per user id, and the
+ * dispatch multicasts to the SAME token set the claim was decided on - a
+ * token pruned or reassigned between "check" and "send" cannot burn a claim
+ * with nothing delivered. Users with no registered tokens are skipped
+ * without claiming (email-only recipients); a claim, once made, is final for
+ * this episode like the email one. (full_pack rows are audit, not deduped -
+ * claim() always succeeds for them.)
  */
 const claimAndPush = async (
   episode: ITheftEpisode,
@@ -93,8 +95,8 @@ const claimAndPush = async (
 ): Promise<boolean> => {
   const tokens = await pushTokenService.activeTokensForUser(userId);
   if (tokens.length === 0) return false; // email-only recipient
-  if (!(await claim(episode, kind, `push:${userId}`, 'push'))) return false;
-  notifier.sendPush(userId, content);
+  if (!(await claim(episode, kind, userId, 'push'))) return false;
+  notifier.sendPushToTokens(userId, tokens, content);
   return true;
 };
 
@@ -187,12 +189,16 @@ export const sendFirstAlert = async (
     body: `"${device.name}" ${trigger} at ${when}. Open Tambo for the details.`,
     data: { type: 'first_alert', episodeId: episode._id.toString() },
   };
-  await claimAndPush(episode, 'first_alert', episode.user.toString(), push);
-  for (const buddyId of await buddyService.activeBuddyUserIds(
+  // per-recipient claims are independent - fan out in parallel so alert
+  // latency does not grow with the buddy count on the theft hot path
+  const buddyIds = await buddyService.activeBuddyUserIds(
     episode.user.toString(),
-  )) {
-    await claimAndPush(episode, 'first_alert', buddyId, push);
-  }
+  );
+  await Promise.allSettled(
+    [episode.user.toString(), ...buddyIds].map((userId) =>
+      claimAndPush(episode, 'first_alert', userId, push),
+    ),
+  );
 };
 
 export interface PackSendResult {
@@ -260,23 +266,19 @@ export const sendPack = async (
     body: 'The signed evidence pack was emailed and is available in the app.',
     data: { type: 'full_pack', episodeId },
   };
+  const episode = await getOwnedEpisode(userId, episodeId);
   const pushRecipients = [
     userId,
     ...(await buddyService.activeBuddyUserIds(userId)),
   ];
-  for (const recipientId of pushRecipients) {
-    const tokens = await pushTokenService.activeTokensForUser(recipientId);
-    if (tokens.length === 0) continue;
-    await PackDelivery.create({
-      user: userId,
-      episode: episodeId,
-      kind: 'full_pack',
-      recipient: `push:${recipientId}`,
-      channel: 'push',
-      sentAt: new Date(),
-    });
-    notifier.sendPush(recipientId, nudge);
-  }
+  // same mechanism as the first alert (claim, then dispatch to the same
+  // token set); full_pack claims are audit rows, never deduped, and the
+  // per-recipient sends are independent - fan out in parallel
+  await Promise.allSettled(
+    pushRecipients.map((recipientId) =>
+      claimAndPush(episode, 'full_pack', recipientId, nudge),
+    ),
+  );
 
   return { recipients };
 };

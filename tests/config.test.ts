@@ -140,6 +140,11 @@ describe('auth cookie config', () => {
     expect(loadConfig).toThrow(/AUTH_COOKIE_SAMESITE must be one of/);
   });
 
+  it('refuses non-boolean spellings instead of silently meaning Secure=true', () => {
+    process.env.AUTH_COOKIE_SECURE = '0';
+    expect(loadConfig).toThrow(/AUTH_COOKIE_SECURE must be "true" or "false"/);
+  });
+
   it('refuses Secure=false outside development/test', () => {
     process.env.NODE_ENV = 'production';
     process.env.JWT_ACCESS_SECRET = 'some-real-secret';
@@ -174,6 +179,12 @@ describe('PUSH_DRIVER', () => {
     process.env.PUSH_DRIVER = 'fcm';
     process.env.FCM_SERVICE_ACCOUNT_JSON = '';
     expect(loadConfig).toThrow(/FCM_SERVICE_ACCOUNT_JSON must be set/);
+  });
+
+  it('refuses to boot on corrupt FCM credentials - not on the first theft alert', () => {
+    process.env.PUSH_DRIVER = 'fcm';
+    process.env.FCM_SERVICE_ACCOUNT_JSON = 'not-valid-base64-json!!';
+    expect(loadConfig).toThrow(/base64-encoded JSON/);
   });
 
   it('defaults to noop under test, and accepts the known drivers', () => {

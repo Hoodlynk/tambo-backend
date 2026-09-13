@@ -16,8 +16,8 @@ import type { IUser, UserPlan } from '../models/user.model';
 export interface Entitlements {
   /** Devices the account may enrol. */
   maxDevices: number;
-  /** How far back activity/trail reads reach. Infinity = retention-bounded. */
-  historyDays: number;
+  /** How far back activity reads reach; null = retention-bounded only. */
+  historyDays: number | null;
   /** Advisory TRAIL_POINT cadence returned to the device during an episode. */
   trailCadenceSeconds: number;
   /** Real-time intruder alerts over push (email always works). */
@@ -33,13 +33,13 @@ const MATRIX: Record<UserPlan, Entitlements> = {
   },
   pro: {
     maxDevices: 1,
-    historyDays: Infinity,
+    historyDays: null,
     trailCadenceSeconds: 60,
     pushAlerts: true,
   },
   family: {
     maxDevices: 5,
-    historyDays: Infinity,
+    historyDays: null,
     trailCadenceSeconds: 60,
     pushAlerts: true,
   },
@@ -56,18 +56,3 @@ export const effectivePlan = (
 export const entitlementsFor = (
   user: Pick<IUser, 'plan' | 'planExpiresAt'>,
 ): Entitlements => MATRIX[effectivePlan(user)];
-
-/** JSON-safe view for API responses (Infinity does not survive JSON). */
-export const entitlementsView = (
-  user: Pick<IUser, 'plan' | 'planExpiresAt'>,
-): Record<string, unknown> => {
-  const entitlements = entitlementsFor(user);
-  return {
-    maxDevices: entitlements.maxDevices,
-    historyDays: Number.isFinite(entitlements.historyDays)
-      ? entitlements.historyDays
-      : null, // null = retention-bounded "full history"
-    trailCadenceSeconds: entitlements.trailCadenceSeconds,
-    pushAlerts: entitlements.pushAlerts,
-  };
-};

@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { testServer } from './setup/testServer';
 import config from '../src/config/config';
+
 import { noopMailer } from '../src/services/mailer/noop.mailer';
 import { clearTestDb, closeTestDb, connectTestDb } from './helpers/db';
 import { CREDENTIALS, latestOtpCode, registerUser } from './helpers/factories';
@@ -79,6 +80,22 @@ describe('CSRF guard', () => {
       .send({ email: CREDENTIALS.email, password: CREDENTIALS.password });
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('csrf_rejected');
+  });
+
+  it('accepts a browser Origin that IS on the CORS allowlist', async () => {
+    await registerUser();
+    config.cors.allowedOrigins.push('https://app.tambo-app.com');
+    try {
+      const res = await request(testServer())
+        .post('/api/auth/web/login')
+        .set(CSRF)
+        .set('Origin', 'https://app.tambo-app.com')
+        .send({ email: CREDENTIALS.email, password: CREDENTIALS.password });
+      expect(res.status).toBe(200);
+      expect(refreshCookieOf(res)).toContain('HttpOnly');
+    } finally {
+      config.cors.allowedOrigins.pop();
+    }
   });
 
   it('rejects a browser Origin that is not on the CORS allowlist', async () => {

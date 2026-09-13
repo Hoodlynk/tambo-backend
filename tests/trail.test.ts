@@ -129,6 +129,25 @@ describe('classifyMovement', () => {
   it('is moving once any fix leaves the radius', () => {
     expect(classifyMovement([CBD, NEARBY, AWAY])).toBe('moving');
   });
+
+  it('one coarse (cell-tower) fix cannot inflate the radius until a real move reads as static', () => {
+    // ~1.2km of genuine movement plus one 2km-accuracy fix: the coarse fix is
+    // excluded from classification instead of widening the radius to 4km
+    expect(
+      classifyMovement([
+        { ...CBD, accuracyM: 10 },
+        { ...CBD, accuracyM: 2000 },
+        { ...AWAY, accuracyM: 10 },
+      ]),
+    ).toBe('moving');
+    // and with ONLY coarse fixes there is no reliable basis to classify
+    expect(
+      classifyMovement([
+        { ...CBD, accuracyM: 2000 },
+        { ...AWAY, accuracyM: 2000 },
+      ]),
+    ).toBe('unknown');
+  });
 });
 
 describe('matchFamiliar', () => {
@@ -313,6 +332,8 @@ describe('GET /episodes/:id/trail', () => {
       accuracyM: 10,
       familiar: null,
     });
+    // the device's claimed capture time rides along, labeled but untrusted
+    expect(new Date(first.capturedAt).getTime()).toBeGreaterThan(0);
     expect(second).toMatchObject({ source: 'TRAIL_POINT', ...AWAY });
     expect(new Date(first.at).getTime()).toBeLessThanOrEqual(
       new Date(second.at).getTime(),
@@ -334,6 +355,21 @@ describe('GET /episodes/:id/trail', () => {
     expect(gone.familiar).toBeNull();
     expect(res.body.trail.leftFamiliar).toMatchObject({ label: 'home' });
     expect(res.body.trail.leftFamiliar.at).toBe(gone.at);
+  });
+
+  it('never reports a departure when the trail RETURNS to the familiar place', async () => {
+    const scene = await enrol();
+    await addFamiliar(scene.accessToken, { label: 'home', ...CBD });
+    const episodeId = await markStolen(scene.accessToken, scene.deviceId);
+
+    // out for a walk and back: home -> away -> home
+    await ingestOne(scene.ingestToken, envelope('TRAIL_POINT', CBD));
+    await ingestOne(scene.ingestToken, envelope('TRAIL_POINT', AWAY));
+    await ingestOne(scene.ingestToken, envelope('TRAIL_POINT', CBD));
+
+    const res = await getTrail(scene.accessToken, episodeId);
+    expect(res.body.trail.movement).toBe('moving');
+    expect(res.body.trail.leftFamiliar).toBeNull();
   });
 
   it('never reports a departure for a static trail (boundary wobble is not a theft cue)', async () => {

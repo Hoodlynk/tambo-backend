@@ -5,9 +5,8 @@ import User from '../models/user.model';
 import type { IUser } from '../models/user.model';
 import { AppError } from '../utils/appError';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
-import { mailer } from './mailer';
+import * as notifier from './notifier.service';
 import type { BuddyInput } from '../validation/buddy.schema';
-import { logger } from '../utils/logger';
 
 /**
  * Buddy relationships: owner -> a Tambo user who receives their theft alerts.
@@ -67,12 +66,10 @@ const sendInviteEmail = (
         'If you would rather not, simply ignore this email.',
       ].join('\n');
 
-  // fire-and-forget, the house mail pattern
-  void mailer
-    .send({ to, subject: `${ownerName} wants you as their Tambo buddy`, text })
-    .catch((error) => {
-      logger.error({ err: error }, 'failed to send buddy invite email');
-    });
+  notifier.sendEmail(
+    { to, subject: `${ownerName} wants you as their Tambo buddy`, text },
+    'buddy_invite',
+  );
 };
 
 /**

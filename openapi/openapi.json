@@ -418,7 +418,7 @@
             }
           },
           "401": {
-            "description": "`invalid_credentials` — Same code for wrong password AND unknown email, by design. · `no_password_credential`",
+            "description": "`invalid_credentials` — Same code for wrong password AND unknown email, by design.",
             "content": {
               "application/json": {
                 "schema": {
@@ -647,6 +647,16 @@
               }
             }
           },
+          "423": {
+            "description": "`account_locked` — Same lockout as the mobile login; retry after retryAfter seconds or reset the password.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "429": {
             "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
             "content": {
@@ -808,6 +818,16 @@
           },
           "403": {
             "description": "`csrf_rejected`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`email_taken` — email_change challenges only: the address was claimed while the code was in flight.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1290,7 +1310,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1531,7 +1551,7 @@
             "description": "All sessions revoked."
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1621,7 +1641,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1698,7 +1718,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1785,7 +1805,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1823,8 +1843,18 @@
           "204": {
             "description": "Revoked."
           },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1937,7 +1967,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent). · `invalid_credentials` — Current password wrong.",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out. · `invalid_credentials` — Current password wrong.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2029,7 +2059,7 @@
             }
           },
           "400": {
-            "description": "`validation_error` — A field failed validation; see details[]. · `email_unchanged`",
+            "description": "`validation_error` — A field failed validation; see details[]. · `no_password_credential` · `email_unchanged`",
             "content": {
               "application/json": {
                 "schema": {
@@ -2039,7 +2069,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent). · `invalid_credentials`",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out. · `invalid_credentials`",
             "content": {
               "application/json": {
                 "schema": {
@@ -2437,7 +2467,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2564,7 +2594,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2680,8 +2710,18 @@
               }
             }
           },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2867,7 +2907,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2913,8 +2953,18 @@
           "204": {
             "description": "Removed."
           },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2925,6 +2975,16 @@
           },
           "404": {
             "description": "`device_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`episode_open` — The device has an open theft episode; resolve it (mark-recovered) first.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2983,6 +3043,11 @@
                         "windowMinutes": {
                           "type": "number"
                         },
+                        "historyDays": {
+                          "nullable": true,
+                          "description": "How far back `recent` reaches under the owner's plan; null = full. Show \"last N days\" instead of looking broken.",
+                          "type": "number"
+                        },
                         "lastAttemptAt": {
                           "nullable": true,
                           "type": "string",
@@ -3036,6 +3101,7 @@
                         "toThreshold",
                         "threshold",
                         "windowMinutes",
+                        "historyDays",
                         "lastAttemptAt",
                         "recent"
                       ],
@@ -3050,8 +3116,18 @@
               }
             }
           },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3115,8 +3191,18 @@
               }
             }
           },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3162,8 +3248,18 @@
           "204": {
             "description": "Revoked."
           },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3376,7 +3472,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3491,8 +3587,18 @@
               }
             }
           },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3621,7 +3727,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3726,8 +3832,18 @@
               }
             }
           },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3798,7 +3914,11 @@
                             "properties": {
                               "at": {
                                 "type": "string",
-                                "description": "ISO-8601 timestamp"
+                                "description": "Server receipt time - the authoritative clock."
+                              },
+                              "capturedAt": {
+                                "type": "string",
+                                "description": "The device's claimed capture time - shown, never trusted."
                               },
                               "source": {
                                 "type": "string",
@@ -3836,6 +3956,7 @@
                             },
                             "required": [
                               "at",
+                              "capturedAt",
                               "source",
                               "lat",
                               "lng",
@@ -3880,8 +4001,18 @@
               }
             }
           },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4020,10 +4151,14 @@
                                 "moving",
                                 "unknown"
                               ]
+                            },
+                            "pointsWithoutFix": {
+                              "type": "number"
                             }
                           },
                           "required": [
-                            "movement"
+                            "movement",
+                            "pointsWithoutFix"
                           ],
                           "additionalProperties": {}
                         },
@@ -4089,8 +4224,18 @@
               }
             }
           },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4146,8 +4291,18 @@
               }
             }
           },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4215,8 +4370,18 @@
               }
             }
           },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4530,7 +4695,7 @@
             }
           },
           "400": {
-            "description": "`missing_content_hash` · `empty_media` · `hash_mismatch` — Body bytes do not hash to X-Content-Sha256. · `not_photo_envelope`",
+            "description": "`missing_content_hash` · `empty_media` · `hash_mismatch` — Body bytes do not hash to X-Content-Sha256. · `not_photo_envelope` · `validation_error` — A field failed validation; see details[].",
             "content": {
               "application/json": {
                 "schema": {
@@ -4682,7 +4847,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4785,7 +4950,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4823,8 +4988,18 @@
           "204": {
             "description": "Removed."
           },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4920,7 +5095,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5011,7 +5186,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5109,7 +5284,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5240,7 +5415,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5388,7 +5563,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5444,8 +5619,18 @@
           "204": {
             "description": "Deleted."
           },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5557,7 +5742,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5707,7 +5892,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5830,7 +6015,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5896,7 +6081,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6035,7 +6220,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6141,7 +6326,7 @@
             }
           },
           "401": {
-            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6175,7 +6360,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "Access token from login/otp-verify/refresh; expires in 15m."
+        "description": "Access token from login/otp-verify/refresh; short-lived (default 15m; deployment-tunable via JWT_ACCESS_TTL)."
       },
       "deviceToken": {
         "type": "apiKey",

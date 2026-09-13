@@ -9,10 +9,10 @@ import User from '../models/user.model';
 import type { IUser } from '../models/user.model';
 import { AppError } from '../utils/appError';
 import * as audit from './audit.service';
-import { mailer } from './mailer';
+import * as notifier from './notifier.service';
 import * as sessionService from './session.service';
+import { clearLockout } from './user.service';
 import type { TokenPair } from './session.service';
-import { logger } from '../utils/logger';
 
 /**
  * Email OTP: every authentication-changing action (signup, login, password
@@ -76,15 +76,14 @@ const dispatchCode = (
   purpose: OtpPurpose,
   code: string,
 ): void => {
-  void mailer
-    .send({
+  notifier.sendEmail(
+    {
       to,
       subject: SUBJECTS[purpose],
       text: codeEmailText(name, purpose, code),
-    })
-    .catch((error) => {
-      logger.error({ err: error, purpose }, 'failed to send OTP email');
-    });
+    },
+    `otp:${purpose}`,
+  );
 };
 
 /**
@@ -287,6 +286,11 @@ const applyPurpose = async (
       break;
     }
   }
+
+  // an emailed code is the same proof of ownership a reset link is, so a
+  // pending failed-login lockout is cleared rather than left dangling under
+  // the fresh session (a locked flag alongside a live session is incoherent)
+  await clearLockout(user._id.toString());
 
   const tokens = await sessionService.startSession(
     user,

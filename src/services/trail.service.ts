@@ -23,6 +23,9 @@ export type Movement = 'static' | 'moving' | 'unknown';
 export interface TrailPoint {
   /** Server receipt time - the authoritative ordering clock. */
   at: Date;
+  /** The DEVICE's claim of when the fix was taken - recorded, never trusted.
+   *  Matters when an offline device uploads a buffered trail in one batch. */
+  capturedAt: Date;
   /** Which evidence type carried the fix - UNLOCK_FAILED or TRAIL_POINT. */
   source: EnvelopeType;
   lat: number;
@@ -56,19 +59,34 @@ export interface EpisodeTrail {
  */
 const STATIC_RADIUS_FLOOR_M = 150;
 
-/** static if every fix is within max(150m, 2x worst accuracy) of the first. */
+/**
+ * Fixes coarser than this (cell-tower grade) are shown in the trail but
+ * EXCLUDED from movement classification: one 2km-accuracy fix must not widen
+ * the static radius until a phone crossing town reads as "stayed in place" -
+ * that would erase the strongest theft cue from the pack.
+ */
+const CLASSIFICATION_ACCURACY_CEILING_M = 250;
+
+/** Bounded read: extremely long trails keep their NEWEST fixes (the current
+ *  location always matters most); the cap is far beyond a realistic episode. */
+export const TRAIL_POINT_CAP = 5000;
+
+/** static if every reliable fix is within max(150m, 2x worst accuracy) of the first. */
 export const classifyMovement = (
   points: Pick<TrailPoint, 'lat' | 'lng' | 'accuracyM'>[],
 ): Movement => {
-  if (points.length < 2) return 'unknown';
+  const reliable = points.filter(
+    (point) => (point.accuracyM ?? 0) <= CLASSIFICATION_ACCURACY_CEILING_M,
+  );
+  if (reliable.length < 2) return 'unknown';
 
-  const worstAccuracy = points.reduce(
+  const worstAccuracy = reliable.reduce(
     (worst, point) => Math.max(worst, point.accuracyM ?? 0),
     0,
   );
   const staticRadiusM = Math.max(STATIC_RADIUS_FLOOR_M, 2 * worstAccuracy);
 
-  const [first, ...rest] = points;
+  const [first, ...rest] = reliable;
   if (!first) return 'unknown';
   return rest.every((point) => haversineMeters(first, point) <= staticRadiusM)
     ? 'static'
@@ -76,6 +94,11 @@ export const classifyMovement = (
 };
 
 const findDeparture = (points: TrailPoint[]): FamiliarDeparture | null => {
+  // a trail that ENDS inside a familiar place has not "left" it - a walk
+  // around the block must not put a bold theft cue in a police document
+  const last = points[points.length - 1];
+  if (!last || last.familiar) return null;
+
   let departure: FamiliarDeparture | null = null;
   for (let i = 1; i < points.length; i += 1) {
     const previous = points[i - 1];
@@ -87,28 +110,34 @@ const findDeparture = (points: TrailPoint[]): FamiliarDeparture | null => {
   return departure;
 };
 
-/** Assembles the trail for an episode the caller has already authorized. */
-export const buildEpisodeTrail = async (
-  episode: ITheftEpisode,
-): Promise<EpisodeTrail> => {
-  const [envelopes, familiarPlaces] = await Promise.all([
-    EvidenceEnvelope.find({
-      episode: episode._id,
-      type: { $in: ['UNLOCK_FAILED', 'TRAIL_POINT'] },
-    })
-      .sort({ receivedAt: 1 })
-      .select('type payload receivedAt')
-      .exec(),
-    familiarLocationService.list(episode.user.toString()),
-  ]);
+/** The fields a trail needs from an evidence envelope. */
+export interface TrailEnvelope {
+  type: EnvelopeType;
+  payload: string;
+  receivedAt: Date;
+  capturedAt: Date;
+}
 
-  // an envelope without a usable fix is simply not a trail point
+/**
+ * The pure core: envelopes (already loaded, e.g. by the pack builder) plus
+ * the owner's familiar places in, a classified and annotated trail out.
+ * Envelopes without a usable fix are simply not trail points - callers that
+ * care about them as liveness evidence count them separately (the pack does).
+ */
+export const trailFromEnvelopes = (
+  envelopes: TrailEnvelope[],
+  familiarPlaces: Awaited<ReturnType<typeof familiarLocationService.list>>,
+): EpisodeTrail => {
   const points: TrailPoint[] = [];
   for (const envelope of envelopes) {
+    if (envelope.type !== 'UNLOCK_FAILED' && envelope.type !== 'TRAIL_POINT') {
+      continue;
+    }
     const location = parseLocation(envelope.payload);
     if (!location) continue;
     points.push({
       at: envelope.receivedAt,
+      capturedAt: envelope.capturedAt,
       source: envelope.type,
       ...location,
       familiar: familiarLocationService.matchFamiliar(familiarPlaces, location),
@@ -122,6 +151,27 @@ export const buildEpisodeTrail = async (
     points,
     leftFamiliar: movement === 'moving' ? findDeparture(points) : null,
   };
+};
+
+/** Assembles the trail for an episode the caller has already authorized. */
+export const buildEpisodeTrail = async (
+  episode: ITheftEpisode,
+): Promise<EpisodeTrail> => {
+  const [envelopes, familiarPlaces] = await Promise.all([
+    // newest-first + cap keeps the CURRENT location under pathological
+    // volumes, then restored to chronological order for the trail
+    EvidenceEnvelope.find({
+      episode: episode._id,
+      type: { $in: ['UNLOCK_FAILED', 'TRAIL_POINT'] },
+    })
+      .sort({ receivedAt: -1 })
+      .limit(TRAIL_POINT_CAP)
+      .select('type payload receivedAt capturedAt')
+      .exec(),
+    familiarLocationService.list(episode.user.toString()),
+  ]);
+
+  return trailFromEnvelopes(envelopes.reverse(), familiarPlaces);
 };
 
 /** The owner's trail for one of their episodes; 404s indistinguishably. */

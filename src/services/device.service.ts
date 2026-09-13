@@ -37,10 +37,12 @@ export const register = async (
 ): Promise<EnrolledDevice> => {
   // the plan bounds ENROLMENT only: already-enrolled devices keep protecting
   // and reporting even if the plan later lapses - never brick mid-theft
-  const owner = await User.findById(userId);
+  const [owner, enrolled] = await Promise.all([
+    User.findById(userId).select('plan planExpiresAt'),
+    Device.countDocuments({ user: userId }),
+  ]);
   if (!owner) throw AppError.unauthorized();
   const { maxDevices } = entitlementsFor(owner);
-  const enrolled = await Device.countDocuments({ user: userId });
   if (enrolled >= maxDevices) {
     throw AppError.conflict(
       `Your plan allows ${maxDevices} enrolled device${maxDevices === 1 ? '' : 's'}. ` +

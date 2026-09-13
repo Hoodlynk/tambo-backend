@@ -60,6 +60,7 @@ Downgrading to free (or omitting `expiresAt`) clears the expiry.
 ## Client-visible effects elsewhere
 
 - `POST /api/v1/devices` → **409 `device_limit`** when the allowance is used.
-- `GET /devices/:id/activity` → `recent` silently trimmed to the plan window.
+- `GET /devices/:id/activity` → `recent` trimmed to the plan window, and the
+  response says so: `activity.historyDays` (null = full history).
 - Evidence ingest responses carry `trailCadenceSeconds` while an episode is
   open — the phone should adopt it as its TRAIL_POINT interval.

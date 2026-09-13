@@ -96,9 +96,11 @@ const rateLimited: EndpointError = {
 };
 const unauthorized: EndpointError = {
   status: 401,
-  code: 'unauthorized',
+  code: 'invalid_token',
   description:
-    'Invalid/expired access token (code "missing_token" when the header is absent).',
+    'Also: "missing_token" when the Authorization header is absent, and ' +
+    '"token_expired" when the token lapsed - on token_expired the client ' +
+    'refreshes instead of signing out.',
 };
 const deviceUnauthorized: EndpointError = {
   status: 401,
@@ -189,7 +191,6 @@ export const endpoints: Endpoint[] = [
         description:
           'Same code for wrong password AND unknown email, by design.',
       },
-      { status: 401, code: 'no_password_credential' },
       {
         status: 423,
         code: 'account_locked',
@@ -204,85 +205,97 @@ export const endpoints: Endpoint[] = [
   // --- Auth: the browser (PWA) surface ------------------------------------------
   // The refresh token lives in an httpOnly cookie scoped to /api/auth/web;
   // every route requires the X-Tambo-Csrf header (any value) and, from a
-  // browser, an Origin on the CORS allowlist. Register/forgot/reset are shared
-  // with the main auth surface.
-  ...(['login', 'otp/verify', 'refresh', 'logout'] as const).map(
-    (leaf): Endpoint => {
-      const base: Record<typeof leaf, Omit<Endpoint, 'method' | 'path'>> = {
-        login: {
-          tag: 'Auth (web)',
-          summary: 'PWA login: session cookie set, or an OTP challenge',
-          description:
-            'Same branching as /auth/login. On success the refresh token is ' +
-            'set as an httpOnly cookie and the body carries only ' +
-            '{ user, tokens: { accessToken, expiresIn } }.',
-          request: { body: loginSchema, headers: [csrfHeader] },
-          responses: [
-            {
-              status: 200,
-              description:
-                'Either { user, tokens } (cookie set) or { challenge }.',
-              schema: r.webAuthResponse.or(r.challengeResponse),
-            },
-          ],
-          errors: [
-            validationError,
-            { status: 401, code: 'invalid_credentials' },
-            { status: 403, code: 'csrf_rejected' },
-            rateLimited,
-          ],
-        },
-        'otp/verify': {
-          tag: 'Auth (web)',
-          summary: 'Complete a challenge; the session cookie is set',
-          request: { body: otpVerifySchema, headers: [csrfHeader] },
-          responses: [
-            {
-              status: 200,
-              description: 'Verified; cookie set.',
-              schema: r.webAuthResponse,
-            },
-          ],
-          errors: [
-            validationError,
-            { status: 401, code: 'invalid_otp' },
-            { status: 401, code: 'otp_attempts_exceeded' },
-            { status: 401, code: 'invalid_challenge' },
-            { status: 403, code: 'csrf_rejected' },
-            rateLimited,
-          ],
-        },
-        refresh: {
-          tag: 'Auth (web)',
-          summary: 'Rotate the session using the cookie (no body)',
-          request: { headers: [csrfHeader] },
-          responses: [
-            {
-              status: 200,
-              description: 'Rotated; new cookie set.',
-              schema: r.webAuthResponse,
-            },
-          ],
-          errors: [
-            { status: 401, code: 'missing_refresh_cookie' },
-            { status: 401, code: 'invalid_refresh_token' },
-            { status: 401, code: 'refresh_token_reused' },
-            { status: 403, code: 'csrf_rejected' },
-            rateLimited,
-          ],
-        },
-        logout: {
-          tag: 'Auth (web)',
-          summary:
-            'Revoke the cookie session and clear the cookie (idempotent)',
-          request: { headers: [csrfHeader] },
-          responses: [{ status: 204, description: 'Cookie cleared.' }],
-          errors: [{ status: 403, code: 'csrf_rejected' }],
-        },
-      };
-      return { method: 'post', path: `/api/auth/web/${leaf}`, ...base[leaf] };
-    },
-  ),
+  // browser, an Origin that is the API's own or on the CORS allowlist.
+  // Register/forgot/reset are shared with the main auth surface.
+  {
+    method: 'post',
+    path: '/api/auth/web/login',
+    tag: 'Auth (web)',
+    summary: 'PWA login: session cookie set, or an OTP challenge',
+    description:
+      'Same branching as /auth/login. On success the refresh token is set ' +
+      'as an httpOnly cookie and the body carries only ' +
+      '{ user, tokens: { accessToken, expiresIn } }.',
+    request: { body: loginSchema, headers: [csrfHeader] },
+    responses: [
+      {
+        status: 200,
+        description: 'Either { user, tokens } (cookie set) or { challenge }.',
+        schema: r.webAuthResponse.or(r.challengeResponse),
+      },
+    ],
+    errors: [
+      validationError,
+      { status: 401, code: 'invalid_credentials' },
+      { status: 403, code: 'csrf_rejected' },
+      {
+        status: 423,
+        code: 'account_locked',
+        description:
+          'Same lockout as the mobile login; retry after retryAfter ' +
+          'seconds or reset the password.',
+      },
+      rateLimited,
+    ],
+  },
+  {
+    method: 'post',
+    path: '/api/auth/web/otp/verify',
+    tag: 'Auth (web)',
+    summary: 'Complete a challenge; the session cookie is set',
+    request: { body: otpVerifySchema, headers: [csrfHeader] },
+    responses: [
+      {
+        status: 200,
+        description: 'Verified; cookie set.',
+        schema: r.webAuthResponse,
+      },
+    ],
+    errors: [
+      validationError,
+      { status: 401, code: 'invalid_otp' },
+      { status: 401, code: 'otp_attempts_exceeded' },
+      { status: 401, code: 'invalid_challenge' },
+      { status: 403, code: 'csrf_rejected' },
+      {
+        status: 409,
+        code: 'email_taken',
+        description:
+          'email_change challenges only: the address was claimed while the code was in flight.',
+      },
+      rateLimited,
+    ],
+  },
+  {
+    method: 'post',
+    path: '/api/auth/web/refresh',
+    tag: 'Auth (web)',
+    summary: 'Rotate the session using the cookie (no body)',
+    request: { headers: [csrfHeader] },
+    responses: [
+      {
+        status: 200,
+        description: 'Rotated; new cookie set.',
+        schema: r.webAuthResponse,
+      },
+    ],
+    errors: [
+      { status: 401, code: 'missing_refresh_cookie' },
+      { status: 401, code: 'invalid_refresh_token' },
+      { status: 401, code: 'refresh_token_reused' },
+      { status: 403, code: 'csrf_rejected' },
+      rateLimited,
+    ],
+  },
+  {
+    method: 'post',
+    path: '/api/auth/web/logout',
+    tag: 'Auth (web)',
+    summary: 'Revoke the cookie session and clear the cookie (idempotent)',
+    request: { headers: [csrfHeader] },
+    responses: [{ status: 204, description: 'Cookie cleared.' }],
+    errors: [{ status: 403, code: 'csrf_rejected' }],
+  },
 
   // --- Auth: OTP completion ---------------------------------------------------------
   {
@@ -493,6 +506,7 @@ export const endpoints: Endpoint[] = [
       unauthorized,
       validationError,
       { status: 401, code: 'invalid_credentials' },
+      { status: 400, code: 'no_password_credential' },
       { status: 400, code: 'email_unchanged' },
       { status: 409, code: 'email_taken' },
     ],
@@ -631,7 +645,16 @@ export const endpoints: Endpoint[] = [
     auth: 'bearer',
     request: { params: deviceIdSchema },
     responses: [{ status: 204, description: 'Removed.' }],
-    errors: [unauthorized, { status: 404, code: 'device_not_found' }],
+    errors: [
+      unauthorized,
+      { status: 404, code: 'device_not_found' },
+      {
+        status: 409,
+        code: 'episode_open',
+        description:
+          'The device has an open theft episode; resolve it (mark-recovered) first.',
+      },
+    ],
   },
   {
     method: 'post',

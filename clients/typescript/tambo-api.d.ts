@@ -227,7 +227,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description `invalid_credentials` — Same code for wrong password AND unknown email, by design. · `no_password_credential` */
+                /** @description `invalid_credentials` — Same code for wrong password AND unknown email, by design. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -362,6 +362,15 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
+                /** @description `account_locked` — Same lockout as the mobile login; retry after retryAfter seconds or reset the password. */
+                423: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
                 /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
                 429: {
                     headers: {
@@ -461,6 +470,15 @@ export interface paths {
                 };
                 /** @description `csrf_rejected` */
                 403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `email_taken` — email_change challenges only: the address was claimed while the code was in flight. */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -844,7 +862,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -1053,7 +1071,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -1115,7 +1133,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -1171,7 +1189,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -1231,7 +1249,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -1279,7 +1297,16 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -1358,7 +1385,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). · `invalid_credentials` — Current password wrong. */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. · `invalid_credentials` — Current password wrong. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -1418,7 +1445,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `validation_error` — A field failed validation; see details[]. · `email_unchanged` */
+                /** @description `validation_error` — A field failed validation; see details[]. · `no_password_credential` · `email_unchanged` */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -1427,7 +1454,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). · `invalid_credentials` */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. · `invalid_credentials` */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -1661,7 +1688,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -1738,7 +1765,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -1821,7 +1848,16 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -1862,7 +1898,16 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -1873,6 +1918,15 @@ export interface paths {
                 };
                 /** @description `device_not_found` */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `episode_open` — The device has an open theft episode; resolve it (mark-recovered) first. */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -1946,7 +2000,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -2001,6 +2055,8 @@ export interface paths {
                                 toThreshold: number;
                                 threshold: number;
                                 windowMinutes: number;
+                                /** @description How far back `recent` reaches under the owner's plan; null = full. Show "last N days" instead of looking broken. */
+                                historyDays: number | null;
                                 /** @description ISO-8601 timestamp */
                                 lastAttemptAt: string | null;
                                 recent: {
@@ -2018,7 +2074,16 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -2078,7 +2143,16 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -2117,7 +2191,16 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -2232,7 +2315,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -2306,7 +2389,16 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -2387,7 +2479,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -2452,7 +2544,16 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -2513,8 +2614,10 @@ export interface paths {
                                  */
                                 movement: "static" | "moving" | "unknown";
                                 points: {
-                                    /** @description ISO-8601 timestamp */
+                                    /** @description Server receipt time - the authoritative clock. */
                                     at: string;
+                                    /** @description The device's claimed capture time - shown, never trusted. */
+                                    capturedAt: string;
                                     /** @enum {string} */
                                     source: "UNLOCK_FAILED" | "TRAIL_POINT";
                                     lat: number;
@@ -2535,7 +2638,16 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -2620,6 +2732,7 @@ export interface paths {
                                 trailSummary: {
                                     /** @enum {string} */
                                     movement: "static" | "moving" | "unknown";
+                                    pointsWithoutFix: number;
                                 } & {
                                     [key: string]: unknown;
                                 };
@@ -2641,7 +2754,16 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -2697,7 +2819,16 @@ export interface paths {
                         "application/pdf": string;
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -2758,7 +2889,16 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -2948,7 +3088,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `missing_content_hash` · `empty_media` · `hash_mismatch` — Body bytes do not hash to X-Content-Sha256. · `not_photo_envelope` */
+                /** @description `missing_content_hash` · `empty_media` · `hash_mismatch` — Body bytes do not hash to X-Content-Sha256. · `not_photo_envelope` · `validation_error` — A field failed validation; see details[]. */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -3048,7 +3188,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -3105,7 +3245,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -3169,7 +3309,16 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -3231,7 +3380,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -3295,7 +3444,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -3362,7 +3511,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -3429,7 +3578,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -3484,7 +3633,16 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -3560,7 +3718,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -3639,7 +3797,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -3729,7 +3887,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -3815,7 +3973,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -3867,7 +4025,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -3967,7 +4125,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;
@@ -4041,7 +4199,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
                 401: {
                     headers: {
                         [name: string]: unknown;

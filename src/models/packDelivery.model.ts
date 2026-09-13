@@ -17,10 +17,10 @@ export type DeliveryChannel = (typeof DELIVERY_CHANNELS)[number];
  *   more evidence arrives), and the earliest first_alert row is the
  *   "first-alert time" the pack's incident summary reports.
  *
- * `recipient` is an email address for the email channel and `push:<userId>`
- * for push - the namespacing keeps the existing unique index correct across
- * channels (one first-alert per human per channel) with NO index migration.
- * `channel` is denormalized alongside for audit queries, not uniqueness.
+ * `recipient` is an email address on the email channel and a user id on the
+ * push channel; `channel` is part of the first-alert uniqueness, so each
+ * human gets at most one first alert PER CHANNEL per episode and the two
+ * channels never suppress each other.
  */
 export interface IPackDelivery extends Document<Types.ObjectId> {
   _id: Types.ObjectId;
@@ -53,9 +53,13 @@ const packDeliverySchema = new Schema<IPackDelivery>(
 
 packDeliverySchema.index({ episode: 1, kind: 1, sentAt: 1 });
 
-// exactly one first-alert per recipient per episode, enforced by the database
+// exactly one first-alert per recipient per channel per episode, enforced by
+// the database. Deploy note: the pre-push index {episode, recipient, kind}
+// remains compatible (email recipients and push user ids never collide) but
+// should be dropped once this one exists - mongoose creates indexes, it never
+// removes old ones.
 packDeliverySchema.index(
-  { episode: 1, recipient: 1, kind: 1 },
+  { episode: 1, recipient: 1, kind: 1, channel: 1 },
   { unique: true, partialFilterExpression: { kind: 'first_alert' } },
 );
 

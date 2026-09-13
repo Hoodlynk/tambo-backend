@@ -25,6 +25,7 @@ export const trail = async (req: Request, res: Response): Promise<void> => {
       movement: trail.movement,
       points: trail.points.map((point) => ({
         at: point.at.toISOString(),
+        capturedAt: point.capturedAt.toISOString(),
         source: point.source,
         lat: point.lat,
         lng: point.lng,

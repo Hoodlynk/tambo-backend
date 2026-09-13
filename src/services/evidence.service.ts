@@ -274,6 +274,9 @@ export interface UnlockAttemptReport {
   toThreshold: number;
   threshold: number;
   windowMinutes: number;
+  /** How far back `recent` reaches under the owner's plan; null = full. The
+   *  client can say "showing the last N days" instead of looking broken. */
+  historyDays: number | null;
   lastAttemptAt: string | null;
   /** Most recent failed attempts, newest first (capped). */
   recent: {
@@ -300,15 +303,16 @@ export const unlockActivity = async (
 
   // the plan bounds how far back the owner's HISTORY view reaches - it never
   // touches threshold counting (safety) or episode evidence/packs
-  const owner = await User.findById(device.user);
-  const historyDays = owner ? entitlementsFor(owner).historyDays : Infinity;
-  const historyFilter = Number.isFinite(historyDays)
-    ? {
-        receivedAt: {
-          $gte: new Date(Date.now() - historyDays * 24 * 60 * 60 * 1000),
-        },
-      }
-    : {};
+  const owner = await User.findById(device.user).select('plan planExpiresAt');
+  const historyDays = owner ? entitlementsFor(owner).historyDays : null;
+  const historyFilter =
+    historyDays !== null
+      ? {
+          receivedAt: {
+            $gte: new Date(Date.now() - historyDays * 24 * 60 * 60 * 1000),
+          },
+        }
+      : {};
 
   const [inWindow, recent] = await Promise.all([
     EvidenceEnvelope.countDocuments({
@@ -331,6 +335,7 @@ export const unlockActivity = async (
     toThreshold: Math.max(0, device.failedUnlockThreshold - inWindow),
     threshold: device.failedUnlockThreshold,
     windowMinutes: config.evidence.thresholdWindowMinutes,
+    historyDays,
     lastAttemptAt: recent[0]?.receivedAt.toISOString() ?? null,
     recent: recent.map((envelope) => ({
       capturedAt: envelope.capturedAt.toISOString(),

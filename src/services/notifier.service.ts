@@ -22,20 +22,38 @@ export interface PushContent {
   data?: Record<string, string>;
 }
 
-export const sendEmail = (message: MailMessage): void => {
+export const sendEmail = (message: MailMessage, kind = 'email'): void => {
   void mailer.send(message).catch((error) => {
-    logger.error({ err: error, to: message.to }, 'failed to send email');
+    logger.error({ err: error, to: message.to, kind }, 'failed to send email');
   });
 };
 
-/** Fire-and-forget multicast to all of a user's devices; dead tokens pruned. */
-export const sendPush = (userId: string, content: PushContent): void => {
+/**
+ * Fire-and-forget multicast to a KNOWN token set; dead tokens pruned after.
+ * Callers that first check "does this user have tokens?" (to decide whether
+ * to claim a delivery) pass the same set here, so the claim and the dispatch
+ * can never disagree about which devices existed.
+ */
+export const sendPushToTokens = (
+  userId: string,
+  tokens: string[],
+  content: PushContent,
+): void => {
+  if (tokens.length === 0) return;
   void (async () => {
-    const tokens = await pushTokenService.activeTokensForUser(userId);
-    if (tokens.length === 0) return;
     const result = await pusher.send({ tokens, ...content });
     await pushTokenService.pruneTokens(result.invalidTokens);
   })().catch((error) => {
     logger.error({ err: error, userId }, 'failed to push-notify user');
   });
+};
+
+/** Convenience for callers with no prior token check. */
+export const sendPush = (userId: string, content: PushContent): void => {
+  void pushTokenService
+    .activeTokensForUser(userId)
+    .then((tokens) => sendPushToTokens(userId, tokens, content))
+    .catch((error) => {
+      logger.error({ err: error, userId }, 'failed to push-notify user');
+    });
 };

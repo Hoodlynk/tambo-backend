@@ -30,19 +30,33 @@ const untilAudited = async (userId: string, type: string): Promise<void> => {
 };
 
 describe('request ids', () => {
-  it('mints an id, echoes it, and honours a sane inbound one', async () => {
+  it('mints an id and echoes it; client-supplied ids are IGNORED without a trusted proxy', async () => {
     const minted = await request(testServer()).get('/api/health');
     expect(minted.get('x-request-id')).toMatch(/^[\w-]{8,}$/);
 
-    const honoured = await request(testServer())
+    // no trusted proxy (trustProxy 0): a client cannot stamp its own id and
+    // pollute forensic correlation
+    const spoofed = await request(testServer())
       .get('/api/health')
-      .set('X-Request-Id', 'proxy-abc-123');
-    expect(honoured.get('x-request-id')).toBe('proxy-abc-123');
+      .set('X-Request-Id', 'attacker-chosen-id');
+    expect(spoofed.get('x-request-id')).not.toBe('attacker-chosen-id');
+  });
 
-    const rejected = await request(testServer())
-      .get('/api/health')
-      .set('X-Request-Id', 'x'.repeat(200)); // insane: minted instead
-    expect(rejected.get('x-request-id')).not.toBe('x'.repeat(200));
+  it('honours a sane inbound id when a trusted proxy fronts the app', async () => {
+    (config as { trustProxy: number }).trustProxy = 1;
+    try {
+      const honoured = await request(testServer())
+        .get('/api/health')
+        .set('X-Request-Id', 'proxy-abc-123');
+      expect(honoured.get('x-request-id')).toBe('proxy-abc-123');
+
+      const insane = await request(testServer())
+        .get('/api/health')
+        .set('X-Request-Id', 'x'.repeat(200)); // fails the sanity check
+      expect(insane.get('x-request-id')).not.toBe('x'.repeat(200));
+    } finally {
+      (config as { trustProxy: number }).trustProxy = 0;
+    }
   });
 });
 
@@ -164,5 +178,38 @@ describe('account lockout', () => {
     const login = await startLogin(CREDENTIALS.email, 'brand-new-password-1');
     expect(login.status).toBe(200);
     await untilAudited(userId, 'password_reset');
+  });
+});
+
+describe('lockout vs OTP', () => {
+  it('a code verified while locked issues the session AND clears the lock - never both flags at once', async () => {
+    // an unverified signup holds a LIVE challenge; wrong-password storms then
+    // lock the account before the code is entered (the reviewer's scenario)
+    const registration = await request(testServer())
+      .post('/api/auth/register')
+      .send(CREDENTIALS);
+    const challengeId = registration.body.challenge.challengeId as string;
+    const code = /code is: (\d{6})/.exec(
+      noopMailer.sent.at(-1)?.text ?? '',
+    )?.[1];
+
+    for (let i = 0; i < config.lockout.threshold; i += 1) {
+      await startLogin(CREDENTIALS.email, 'wrong-password');
+    }
+    const locked = await startLogin();
+    expect(locked.status).toBe(423);
+
+    // mailbox possession is the recovery factor: the code completes signup...
+    const verified = await request(testServer())
+      .post('/api/auth/otp/verify')
+      .send({ challengeId, code });
+    expect(verified.status).toBe(200);
+    expect(verified.body.tokens.accessToken).toBeTruthy();
+
+    // ...and the lock is CLEARED, not left dangling under a live session
+    const user = await User.findOne({ email: 'ada@tambo.app' });
+    expect(user?.lockedUntil).toBeUndefined();
+    const login = await startLogin();
+    expect(login.status).toBe(200);
   });
 });

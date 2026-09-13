@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { AUTH_EVENT_TYPES } from '../models/authEvent.model';
+import { OTP_PURPOSES } from '../models/otpChallenge.model';
 
 /**
  * Response-body schemas for the OpenAPI document. Requests are described by
@@ -73,7 +75,7 @@ export const webAuthResponse = z.object({
 
 export const challenge = z.object({
   challengeId: objectId,
-  purpose: z.enum(['signup', 'login', 'password_change', 'email_change']),
+  purpose: z.enum(OTP_PURPOSES),
   expiresInMinutes: z.number(),
 });
 
@@ -99,20 +101,7 @@ export const sessionsResponse = z.object({
 export const securityEventsResponse = z.object({
   events: z.array(
     z.object({
-      type: z.enum([
-        'login_succeeded',
-        'login_failed',
-        'login_challenged',
-        'otp_verified',
-        'otp_failed',
-        'password_changed',
-        'email_changed',
-        'password_reset_requested',
-        'password_reset',
-        'sessions_revoked_all',
-        'session_revoked',
-        'account_locked',
-      ]),
+      type: z.enum(AUTH_EVENT_TYPES),
       at: isoDate,
       ip: z.string().optional(),
       userAgent: z.string().optional(),
@@ -164,6 +153,13 @@ export const activityResponse = z.object({
       .describe('Attempts left before auto-open; 0 = would open.'),
     threshold: z.number(),
     windowMinutes: z.number(),
+    historyDays: z
+      .number()
+      .nullable()
+      .describe(
+        "How far back `recent` reaches under the owner's plan; null = full. " +
+          'Show "last N days" instead of looking broken.',
+      ),
     lastAttemptAt: isoDate.nullable(),
     recent: z.array(
       z.object({
@@ -199,7 +195,10 @@ export const trailResponse = z.object({
       .describe('unknown = fewer than 2 usable fixes.'),
     points: z.array(
       z.object({
-        at: isoDate,
+        at: isoDate.describe('Server receipt time - the authoritative clock.'),
+        capturedAt: isoDate.describe(
+          "The device's claimed capture time - shown, never trusted.",
+        ),
         source: z.enum(['UNLOCK_FAILED', 'TRAIL_POINT']),
         lat: z.number(),
         lng: z.number(),
@@ -226,6 +225,7 @@ export const pack = z.looseObject({
   trail: z.array(z.looseObject({})),
   trailSummary: z.looseObject({
     movement: z.enum(['static', 'moving', 'unknown']),
+    pointsWithoutFix: z.number(),
   }),
   photos: z.array(z.looseObject({})),
   actionChecklist: z.array(z.string()),

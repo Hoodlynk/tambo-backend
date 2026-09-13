@@ -1,7 +1,15 @@
-import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 import config from '../src/config/config';
+import Buddy from '../src/models/buddy.model';
+import Device from '../src/models/device.model';
+import EvidenceEnvelope from '../src/models/evidenceEnvelope.model';
+import LegalAcceptance from '../src/models/legalAcceptance.model';
+import PackDelivery from '../src/models/packDelivery.model';
+import PushToken from '../src/models/pushToken.model';
+import RefreshToken from '../src/models/refreshToken.model';
+import TheftEpisode from '../src/models/theftEpisode.model';
 import User from '../src/models/user.model';
+import { hashPassword } from '../src/services/credentials/password.credential';
 import * as deviceService from '../src/services/device.service';
 import * as episodeService from '../src/services/episode.service';
 import * as evidenceService from '../src/services/evidence.service';
@@ -30,13 +38,38 @@ export interface SeedResult {
   refreshToken: string;
 }
 
+/**
+ * Removes a previous run's ENTIRE footprint, not just the user - deleting
+ * only the user would leave an orphaned device with a still-live ingest
+ * token, an open episode owned by nobody, and envelope ids that collide with
+ * the next run's uploads.
+ */
+const removePreviousSeed = async (): Promise<void> => {
+  const previous = await User.findOne({ email: SEED_EMAIL });
+  if (!previous) return;
+  const userId = previous._id;
+  const devices = await Device.find({ user: userId }).select('_id');
+  const deviceIds = devices.map((device) => device._id);
+  await Promise.all([
+    EvidenceEnvelope.deleteMany({ device: { $in: deviceIds } }),
+    TheftEpisode.deleteMany({ user: userId }),
+    PackDelivery.deleteMany({ user: userId }),
+    Device.deleteMany({ user: userId }),
+    Buddy.deleteMany({ owner: userId }),
+    LegalAcceptance.deleteMany({ user: userId }),
+    RefreshToken.deleteMany({ user: userId }),
+    PushToken.deleteMany({ user: userId }),
+  ]);
+  await User.deleteOne({ _id: userId });
+};
+
 /** The seeding itself, against whatever database mongoose is connected to. */
 export const seed = async (): Promise<SeedResult> => {
-  await User.deleteOne({ email: SEED_EMAIL });
+  await removePreviousSeed();
   const user = await User.create({
     name: 'Dev Owner',
     email: SEED_EMAIL,
-    passwordHash: await bcrypt.hash(SEED_PASSWORD, config.bcryptRounds),
+    passwordHash: await hashPassword(SEED_PASSWORD),
     emailVerifiedAt: new Date(),
     plan: 'pro',
   });
@@ -65,15 +98,19 @@ export const seed = async (): Promise<SeedResult> => {
     { lat: -1.2945, lng: 36.825, accuracyM: 12 },
     { lat: -1.3005, lng: 36.83, accuracyM: 9 },
   ];
+  // run-unique ids: envelope ids are globally unique, and a stale id from an
+  // interrupted previous run must never turn this run's uploads into
+  // id_conflict rejections
+  const run = Date.now();
   const envelopes = [
-    ...points.slice(0, 1).map((location, index) => ({
-      id: `seed-unlock-${index}`,
+    {
+      id: `seed-${run}-unlock-0`,
       type: 'UNLOCK_FAILED' as const,
       capturedAt: new Date().toISOString(),
-      payload: JSON.stringify({ attemptNo: index + 1, location }),
-    })),
+      payload: JSON.stringify({ attemptNo: 1, location: points[0] }),
+    },
     ...points.map((location, index) => ({
-      id: `seed-trail-${index}`,
+      id: `seed-${run}-trail-${index}`,
       type: 'TRAIL_POINT' as const,
       capturedAt: new Date().toISOString(),
       payload: JSON.stringify(location),

@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import type { ZodObject, ZodType } from 'zod';
-import config from '../config/config';
 import { endpoints } from './registry';
 import type { Endpoint, EndpointError } from './registry';
 import { errorResponse } from './responses';
@@ -55,6 +54,31 @@ const errorsByStatus = (
   return grouped;
 };
 
+/**
+ * Failures every endpoint inherits from middleware rather than declaring:
+ * any request with a validated body/params/query can 400 validation_error.
+ * Injected here so the registry cannot under-document them.
+ */
+const implicitErrors = (endpoint: Endpoint): EndpointError[] => {
+  const declared = new Set(
+    (endpoint.errors ?? []).map((error) => `${error.status}:${error.code}`),
+  );
+  const implied: EndpointError[] = [];
+  if (
+    (endpoint.request?.body ||
+      endpoint.request?.params ||
+      endpoint.request?.query) &&
+    !declared.has('400:validation_error')
+  ) {
+    implied.push({
+      status: 400,
+      code: 'validation_error',
+      description: 'A field failed validation; see details[].',
+    });
+  }
+  return implied;
+};
+
 const operationFor = (endpoint: Endpoint): Record<string, unknown> => {
   const parameters: Record<string, unknown>[] = [];
   if (endpoint.request?.params) {
@@ -88,7 +112,10 @@ const operationFor = (endpoint: Endpoint): Record<string, unknown> => {
         : {}),
     };
   }
-  for (const [status, errors] of errorsByStatus(endpoint.errors ?? [])) {
+  for (const [status, errors] of errorsByStatus([
+    ...(endpoint.errors ?? []),
+    ...implicitErrors(endpoint),
+  ])) {
     responses[String(status)] = {
       description: errors
         .map(
@@ -188,7 +215,9 @@ export const buildOpenApiDocument = (): Record<string, unknown> => {
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'JWT',
-          description: `Access token from login/otp-verify/refresh; expires in ${config.jwt.accessTtl}.`,
+          description:
+            'Access token from login/otp-verify/refresh; short-lived ' +
+            '(default 15m; deployment-tunable via JWT_ACCESS_TTL).',
         },
         deviceToken: {
           type: 'apiKey',

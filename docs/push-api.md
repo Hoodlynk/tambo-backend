@@ -47,9 +47,13 @@ Design rules the clients can rely on:
 - **Lock-screen safety**: push payloads never carry IMEIs or locations — those
   travel by email and in-app. Route on `data.type` + `data.episodeId`.
 - **Channel independence**: email and push claims are separate rows in the
-  delivery ledger (`channel` field; push recipients recorded as
-  `push:<userId>`), so one channel failing or being unavailable never
-  suppresses the other. A user with no tokens simply gets email only.
+  delivery ledger (`channel` is part of the first-alert uniqueness; push rows
+  store the recipient's user id), so one channel failing or being unavailable
+  never suppresses the other. A user with no tokens simply gets email only.
+- **Delivery is at-most-once per channel**: the claim is recorded before the
+  dispatch, so a crash in the millisecond between them cannot double-alert -
+  the accepted trade-off is that the push for that episode is then never
+  retried. Email is the guaranteed backbone; push is the fast lane.
 - **Dead-token hygiene is server-side**: when FCM reports a token dead at send
   time, the row is deleted. Clients never manage registry state.
 
@@ -58,6 +62,10 @@ Design rules the clients can rely on:
 1. Create a Firebase project; enable Cloud Messaging.
 2. Generate a service-account key (Project settings → Service accounts).
 3. `FCM_SERVICE_ACCOUNT_JSON=$(base64 < service-account.json)` and
-   `PUSH_DRIVER=fcm`. A typo'd driver or missing credential refuses to boot.
-4. Client apps configure their own `google-services.json` / web push
+   `PUSH_DRIVER=fcm`. A typo'd driver, missing credential, or corrupt base64
+   refuses to boot.
+4. Deploy note (first deploy with push): the first-alert unique index changed
+   to include `channel`; mongoose creates the new index at boot but never
+   drops the old `{episode, recipient, kind}` one - drop it manually once.
+5. Client apps configure their own `google-services.json` / web push
    certificates from the same Firebase project.

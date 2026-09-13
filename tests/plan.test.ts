@@ -208,12 +208,15 @@ describe('history window enforcement', () => {
       .get(`/api/v1/devices/${deviceId}/activity`)
       .set('Authorization', auth(accessToken));
     expect(freeView.body.activity.recent).toHaveLength(0);
+    // the truncation is SIGNALLED, so clients can say "showing last 7 days"
+    expect(freeView.body.activity.historyDays).toBe(7);
 
     await setPlanDirect(userId, 'pro');
     const proView = await request(testServer())
       .get(`/api/v1/devices/${deviceId}/activity`)
       .set('Authorization', auth(accessToken));
     expect(proView.body.activity.recent).toHaveLength(1);
+    expect(proView.body.activity.historyDays).toBeNull();
   });
 });
 

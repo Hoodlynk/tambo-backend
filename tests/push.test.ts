@@ -163,7 +163,7 @@ describe('first-alert push fan-out', () => {
       await PackDelivery.countDocuments({
         kind: 'first_alert',
         channel: 'push',
-        recipient: `push:${userId}`,
+        recipient: userId,
       }),
     ).toBe(1);
   });
@@ -189,9 +189,7 @@ describe('first-alert push fan-out', () => {
     const rows = await PackDelivery.find({ kind: 'first_alert' });
     const channels = rows.map((row) => row.channel).sort();
     expect(channels).toEqual(['email', 'push']);
-    expect(rows.find((row) => row.channel === 'push')?.recipient).toBe(
-      `push:${userId}`,
-    );
+    expect(rows.find((row) => row.channel === 'push')?.recipient).toBe(userId);
     expect(noopPusher.sent).toHaveLength(1);
   });
 
@@ -264,7 +262,7 @@ describe('full-pack push nudge', () => {
       await PackDelivery.countDocuments({
         kind: 'full_pack',
         channel: 'push',
-        recipient: `push:${userId}`,
+        recipient: userId,
       }),
     ).toBe(1);
     expect(deviceId).toBeTruthy();

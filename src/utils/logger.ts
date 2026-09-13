@@ -10,15 +10,20 @@ import config from '../config/config';
 export const logger = pino({
   level: config.log.level,
   redact: {
+    // NOTE: no 'code' path here - the errorHandler logs the ERROR code
+    // (invalid_credentials, refresh_token_reused, ...) on purpose: that field
+    // is what makes credential-stuffing and replay visible in logs. OTP codes
+    // are never passed to a log call in the first place (the house rule).
     paths: [
       'authorization',
       'refreshToken',
       'accessToken',
-      'code',
+      'otp',
       'password',
       '*.authorization',
       '*.refreshToken',
       '*.accessToken',
+      '*.otp',
       '*.password',
     ],
     censor: '[redacted]',

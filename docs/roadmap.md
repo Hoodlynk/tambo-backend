@@ -6,7 +6,9 @@ Last updated: 2026-09-13.
 **Active program (approved 2026-09-13)**: depth-first client-readiness &
 completion plan — Phase 0 API contract (✅) → 1 PWA cookie auth (✅) →
 2 FCM push (✅) → 3 entitlements (✅) → 4 observability (✅) → 5 CI (✅) →
-6 onboarding (✅). **The program is complete.**
+6 onboarding (✅). **The program is complete**, followed by a deep 10-angle
+review (2026-09-14) whose confirmed findings were all fixed - see that
+commit's message for the list.
 
 ### ✅ Phase 6 — Onboarding & readability (2026-09-13)
 CLAUDE.md (the working rules, incl. the OpenAPI-registry and entitlements
@@ -56,8 +58,8 @@ Token registry: `POST/DELETE /api/v1/push-tokens` — unique tokens
 reassign-on-upsert across accounts, per-user cap with LRU eviction,
 error-driven pruning when FCM reports a token dead. `notifier.service` is the
 one channel fan-out; `delivery.service` claims per channel independently
-(recipient `push:<userId>` — namespacing keeps the existing unique index, NO
-production index migration). First alert: once per human per channel,
+(the first-alert unique index includes `channel`; push rows store the bare
+user id - revised in the 2026-09-14 review). First alert: once per human per channel,
 multicast to all devices, lock-screen-safe payloads (no IMEIs/locations).
 Full pack: push is a deep-link nudge, never the PDF. Human action open:
 create the Firebase project + service account (docs/push-api.md).

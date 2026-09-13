@@ -244,10 +244,13 @@ describe('GET /episodes/:id/pack', () => {
       familiar: null,
     });
     expect(pack.trail[0]!.mapsLink).toContain('maps.google.com');
-    // the two fixes are ~1.2km apart: a moving trail
+    expect(pack.trail[0]!.capturedAt).toBeTruthy();
+    // the two fixes are ~1.2km apart: a moving trail; the two UNLOCK_FAILED
+    // envelopes carried no location, so they count as fixless check-ins
     expect(pack.trailSummary).toEqual({
       movement: 'moving',
       leftFamiliar: null,
+      pointsWithoutFix: 2,
     });
     expect(pack.photos).toHaveLength(1);
     expect(pack.photos[0]!.sha256).toBe(sha256Hex(TINY_JPEG));

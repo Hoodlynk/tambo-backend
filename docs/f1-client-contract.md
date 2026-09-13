@@ -133,7 +133,8 @@ Canonical shape:
     { "id": "bad7...",      "status": "rejected", "reason": "hash_mismatch" }
   ],
   "episodeId": "665f0a...c31",
-  "episodeOpened": true
+  "episodeOpened": true,
+  "trailCadenceSeconds": 60
 }
 ```
 
@@ -160,6 +161,10 @@ Per-envelope `status`:
   it. The server has already sent the first alert. Escalate: switch uploads to
   expedited, start the trail.
 - Neither present → below threshold, no episode. Keep capturing normally.
+- `trailCadenceSeconds` (present whenever an episode is open) → the server's
+  ADVICE for how often to upload `TRAIL_POINT` envelopes, tuned to the
+  owner's plan. Adopt it as the trail interval; it is never an enforcement —
+  evidence is accepted at any rate.
 
 ### Idempotency & retry policy
 

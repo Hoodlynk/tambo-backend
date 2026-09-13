@@ -200,10 +200,22 @@ const parsePushDriver = (): PushDriver => {
       `PUSH_DRIVER must be one of: ${PUSH_DRIVERS.join(', ')}; got "${raw}".`,
     );
   }
-  if (raw === 'fcm' && !process.env.FCM_SERVICE_ACCOUNT_JSON) {
-    throw new Error(
-      'FCM_SERVICE_ACCOUNT_JSON must be set when PUSH_DRIVER is "fcm".',
-    );
+  if (raw === 'fcm') {
+    const encoded = process.env.FCM_SERVICE_ACCOUNT_JSON;
+    if (!encoded) {
+      throw new Error(
+        'FCM_SERVICE_ACCOUNT_JSON must be set when PUSH_DRIVER is "fcm".',
+      );
+    }
+    // fail at BOOT, not on the first theft alert: a truncated/corrupt value
+    // would otherwise surface only when a push is attempted
+    try {
+      JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
+    } catch {
+      throw new Error(
+        'FCM_SERVICE_ACCOUNT_JSON must be base64-encoded JSON (a Firebase service-account key).',
+      );
+    }
   }
   return raw as PushDriver;
 };
@@ -241,7 +253,15 @@ const parseAuthCookie = (): Config['authCookie'] => {
   }
   const sameSite = rawSameSite as CookieSameSite;
 
-  const secure = process.env.AUTH_COOKIE_SECURE !== 'false';
+  const rawSecure = process.env.AUTH_COOKIE_SECURE || 'true';
+  if (rawSecure !== 'true' && rawSecure !== 'false') {
+    // '0'/'no'/'False' silently meaning Secure=true would produce the exact
+    // "login works, refresh doesn't" trap this flag exists to prevent
+    throw new Error(
+      `AUTH_COOKIE_SECURE must be "true" or "false"; got "${rawSecure}".`,
+    );
+  }
+  const secure = rawSecure === 'true';
   if (!secure && !isLocalEnv) {
     throw new Error(
       'AUTH_COOKIE_SECURE=false is allowed only when NODE_ENV is explicitly development or test.',
@@ -341,7 +361,12 @@ const config: Config = {
   push: {
     driver: parsePushDriver(),
     fcmServiceAccountJson: process.env.FCM_SERVICE_ACCOUNT_JSON || '',
-    maxTokensPerUser: Number(process.env.PUSH_MAX_TOKENS_PER_USER) || 10,
+    // clamped to FCM's 500-token multicast hard limit: a value above it
+    // would make every send to a heavy user fail outright
+    maxTokensPerUser: Math.min(
+      500,
+      Number(process.env.PUSH_MAX_TOKENS_PER_USER) || 10,
+    ),
   },
   authCookie: parseAuthCookie(),
   trustProxy: parseTrustProxy(),

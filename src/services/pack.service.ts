@@ -6,7 +6,9 @@ import type { ITheftEpisode } from '../models/theftEpisode.model';
 import User from '../models/user.model';
 import { AppError } from '../utils/appError';
 import { packPublicKeyBase64, signManifest } from '../utils/signing';
-import { buildEpisodeTrail } from './trail.service';
+import { mapsLink } from './evidenceLocation';
+import * as familiarLocationService from './familiarLocation.service';
+import { trailFromEnvelopes } from './trail.service';
 import type { Movement } from './trail.service';
 
 /**
@@ -21,7 +23,11 @@ import type { Movement } from './trail.service';
  */
 
 export interface PackTrailPoint {
+  /** Server receipt time - the authoritative clock. */
   receivedAt: string;
+  /** The device's claim of capture time - shown, never trusted; matters when
+   *  an offline device uploads a buffered trail in one batch. */
+  capturedAt: string;
   /** Which evidence type carried the fix - UNLOCK_FAILED or TRAIL_POINT. */
   source: string;
   lat: number;
@@ -33,10 +39,16 @@ export interface PackTrailPoint {
 }
 
 export interface PackTrailSummary {
-  /** static = one place; moving = a path; unknown = under 2 usable fixes. */
+  /** static = one place; moving = a path; unknown = under 2 reliable fixes. */
   movement: Movement;
   /** Set when a moving trail left a familiar place - the strongest theft cue. */
   leftFamiliar: { label: string; at: string } | null;
+  /**
+   * Location-bearing envelope types that arrived WITHOUT a usable fix
+   * (GPS-denied, malformed coordinates). They are liveness evidence - the
+   * device reported in at those times - and stay in the signed manifest.
+   */
+  pointsWithoutFix: number;
 }
 
 export interface PackManifestItem {
@@ -140,7 +152,7 @@ export const buildPack = async (
 ): Promise<EvidencePack> => {
   const episode = await getOwnedEpisode(userId, episodeId);
 
-  const [owner, device, envelopes, firstAlert, episodeTrail] =
+  const [owner, device, envelopes, firstAlert, familiarPlaces] =
     await Promise.all([
       User.findById(episode.user),
       Device.findById(episode.device),
@@ -150,8 +162,11 @@ export const buildPack = async (
       PackDelivery.findOne({ episode: episode._id, kind: 'first_alert' })
         .sort({ sentAt: 1 })
         .exec(),
-      buildEpisodeTrail(episode),
+      familiarLocationService.list(episode.user.toString()),
     ]);
+  // the trail is computed from the envelopes already in hand - the pack must
+  // not read the episode's evidence twice
+  const episodeTrail = trailFromEnvelopes(envelopes, familiarPlaces);
 
   if (!owner || !device) {
     throw AppError.notFound(
@@ -173,14 +188,20 @@ export const buildPack = async (
   // here; the manifest still lists every envelope.
   const trail: PackTrailPoint[] = episodeTrail.points.map((point) => ({
     receivedAt: point.at.toISOString(),
+    capturedAt: point.capturedAt.toISOString(),
     source: point.source,
     lat: point.lat,
     lng: point.lng,
     ...(point.accuracyM !== undefined ? { accuracyM: point.accuracyM } : {}),
     // v1: link rather than rendered map image (features plan decision #3)
-    mapsLink: `https://maps.google.com/?q=${point.lat},${point.lng}`,
+    mapsLink: mapsLink(point),
     familiar: point.familiar,
   }));
+
+  const locationBearing = envelopes.filter(
+    (envelope) =>
+      envelope.type === 'UNLOCK_FAILED' || envelope.type === 'TRAIL_POINT',
+  ).length;
 
   const trailSummary: PackTrailSummary = {
     movement: episodeTrail.movement,
@@ -190,6 +211,7 @@ export const buildPack = async (
           at: episodeTrail.leftFamiliar.at.toISOString(),
         }
       : null,
+    pointsWithoutFix: locationBearing - trail.length,
   };
 
   const photos = envelopes

@@ -73,6 +73,10 @@ const userSchema = new Schema<IUser>(
       versionKey: false,
       transform: (_doc, ret: Record<string, unknown>) => {
         delete ret.passwordHash;
+        // server-internal security state: none of these are client contract
+        delete ret.failedLoginAttempts;
+        delete ret.lockedUntil;
+        delete ret.sessionsInvalidatedAt;
         return ret;
       },
     },

@@ -20,6 +20,16 @@ import { AppError } from '../utils/appError';
  */
 export const CSRF_HEADER = 'x-tambo-csrf';
 
+/** The API's own origin: a PWA served from the same host is same-origin by
+ *  definition and must work with an empty CORS allowlist. */
+const selfOrigin = (): string | null => {
+  try {
+    return new URL(config.publicApiUrl).origin;
+  } catch {
+    return null;
+  }
+};
+
 export const csrfGuard: RequestHandler = (req, _res, next) => {
   if (!req.get(CSRF_HEADER)) {
     next(
@@ -29,7 +39,11 @@ export const csrfGuard: RequestHandler = (req, _res, next) => {
   }
 
   const origin = req.get('origin');
-  if (origin && !config.cors.allowedOrigins.includes(origin)) {
+  if (
+    origin &&
+    origin !== selfOrigin() &&
+    !config.cors.allowedOrigins.includes(origin)
+  ) {
     next(new AppError(403, 'Origin not allowed.', 'csrf_rejected'));
     return;
   }

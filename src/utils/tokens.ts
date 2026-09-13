@@ -18,7 +18,13 @@ export const signAccessToken = (payload: AccessTokenPayload): string =>
 export const verifyAccessToken = (token: string): AccessTokenPayload => {
   try {
     const decoded = jwt.verify(token, config.jwt.accessSecret);
-    if (typeof decoded === 'string' || typeof decoded.sub !== 'string') {
+    if (
+      typeof decoded === 'string' ||
+      typeof decoded.sub !== 'string' ||
+      (decoded.role !== 'user' && decoded.role !== 'admin')
+    ) {
+      // a missing/garbage role claim is as malformed as a missing sub - the
+      // type says UserRole, so nothing downstream may receive undefined
       throw AppError.unauthorized('Malformed access token.', 'invalid_token');
     }
     return { sub: decoded.sub, role: decoded.role as UserRole };

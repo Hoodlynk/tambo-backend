@@ -1,7 +1,8 @@
 import User from '../models/user.model';
 import type { UserPlan } from '../models/user.model';
 import { AppError } from '../utils/appError';
-import { effectivePlan, entitlementsView } from './entitlements';
+import { effectivePlan, entitlementsFor } from './entitlements';
+import type { Entitlements } from './entitlements';
 
 /**
  * The plan surface. Reading is every client's Settings screen; WRITING is an
@@ -15,14 +16,14 @@ export interface PlanView {
   /** What is actually in force right now (a lapsed paid plan reads as free). */
   effectivePlan: UserPlan;
   expiresAt: string | null;
-  entitlements: Record<string, unknown>;
+  entitlements: Entitlements;
 }
 
 const toView = (user: { plan: UserPlan; planExpiresAt?: Date }): PlanView => ({
   plan: user.plan,
   effectivePlan: effectivePlan(user),
   expiresAt: user.planExpiresAt?.toISOString() ?? null,
-  entitlements: entitlementsView(user),
+  entitlements: entitlementsFor(user),
 });
 
 export const getForUser = async (userId: string): Promise<PlanView> => {

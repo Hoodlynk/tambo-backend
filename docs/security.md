@@ -115,9 +115,10 @@ account) slides under it. The lockout counter is per ACCOUNT: after
 `LOCKOUT_THRESHOLD` consecutive failed password logins the account answers
 **423 `account_locked`** (with `retryAfter`) for `LOCKOUT_DURATION_MINUTES`,
 regardless of the password — running the comparison while locked would turn
-the lock into a guessing oracle. A successful login resets the counter, and a
-**password reset clears the lock early** (mailbox control must always let the
-real owner back in). Trade-off, stated plainly: a 423 confirms the account
+the lock into a guessing oracle. A successful login resets the counter, and **proving mailbox control clears
+the lock early** - via a password-reset link OR by completing any emailed OTP
+challenge (the real owner must always have a way back in, and a lock must
+never coexist with a freshly issued session). Trade-off, stated plainly: a 423 confirms the account
 exists to someone who already has the email; accepted, since the alternative
 (silent lock) turns lockout into an unexplainable login failure for the owner.
 Locks and failures land in the audit trail.
@@ -125,7 +126,8 @@ Locks and failures land in the audit trail.
 ## Observability
 
 - **Structured logs** (pino, JSON lines): every request gets an
-  `X-Request-Id` (inbound ids honoured when sane, echoed always), one line per
+  `X-Request-Id` (inbound ids honoured only behind a trusted proxy -
+  `TRUST_PROXY > 0` - and only when sane; echoed always), one line per
   completed request, one `warn` per expected 4xx, full error objects for 500s.
   Redaction is configured, but the primary rule is that tokens, codes, and
   password material are never passed to a log call at all.

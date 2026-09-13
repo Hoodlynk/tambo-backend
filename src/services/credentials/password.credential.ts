@@ -7,10 +7,11 @@ import { AppError } from '../../utils/appError';
 import { isDuplicateKeyError } from '../../utils/mongoErrors';
 import { generateOpaqueToken, hashOpaqueToken } from '../../utils/tokens';
 import * as audit from '../audit.service';
-import { mailer } from '../mailer';
+import * as notifier from '../notifier.service';
 import * as otpService from '../otp.service';
 import type { ChallengeSummary } from '../otp.service';
 import * as sessionService from '../session.service';
+import { clearLockout } from '../user.service';
 import type { TokenPair } from '../session.service';
 import type {
   ChangeEmailInput,
@@ -19,7 +20,6 @@ import type {
   RegisterInput,
   ResetPasswordInput,
 } from '../../validation/auth.schema';
-import { logger } from '../../utils/logger';
 
 /**
  * Email + password credentials. This module is the ONLY place that knows about
@@ -41,7 +41,7 @@ export interface AuthResult {
 const DUMMY_HASH =
   '$2b$12$2g05wDqWWn9kMCABYg.ORujVXYdM3wD1LSeZgoimOCSWGBBUF.L9W';
 
-const hashPassword = (plain: string): Promise<string> =>
+export const hashPassword = (plain: string): Promise<string> =>
   bcrypt.hash(plain, config.bcryptRounds);
 
 /**
@@ -136,8 +136,14 @@ const registerFailedLogin = async (
     { new: true },
   );
   if (updated && updated.failedLoginAttempts >= config.lockout.threshold) {
-    await User.updateOne(
-      { _id: user._id },
+    // conditional on the counter still being at threshold: a successful
+    // login that reset the counter in the meantime must win - otherwise an
+    // in-flight failure could lock the owner out right AFTER they signed in
+    const locked = await User.updateOne(
+      {
+        _id: user._id,
+        failedLoginAttempts: { $gte: config.lockout.threshold },
+      },
       {
         $set: {
           lockedUntil: new Date(
@@ -147,7 +153,9 @@ const registerFailedLogin = async (
         },
       },
     );
-    audit.record(user._id, 'account_locked', context);
+    if (locked.modifiedCount > 0) {
+      audit.record(user._id, 'account_locked', context);
+    }
   }
 };
 
@@ -191,10 +199,7 @@ export const login = async (
   }
 
   if (user.failedLoginAttempts > 0 || user.lockedUntil) {
-    await User.updateOne(
-      { _id: user._id },
-      { $set: { failedLoginAttempts: 0 }, $unset: { lockedUntil: 1 } },
-    );
+    await clearLockout(user._id.toString());
   }
 
   if (!user.emailVerifiedAt) {
@@ -324,8 +329,8 @@ export const requestPasswordReset = async (
   // provider round trip, unknown = instant), re-opening the enumeration hole
   // the unconditional 204 exists to close - and a provider outage would take
   // this endpoint down with it.
-  void mailer
-    .send({
+  notifier.sendEmail(
+    {
       to: email,
       subject: 'Reset your Tambo password',
       text: [
@@ -338,10 +343,9 @@ export const requestPasswordReset = async (
         '',
         'If you did not request this, you can safely ignore this email.',
       ].join('\n'),
-    })
-    .catch((error) => {
-      logger.error({ err: error }, 'failed to send password reset email');
-    });
+    },
+    'password_reset',
+  );
 };
 
 /** Consumes a reset token, sets the new password, and evicts all old sessions. */
@@ -379,10 +383,7 @@ export const resetPassword = async (
   await setPassword(user, input.password);
   // proving mailbox control via the reset link also clears any lockout - the
   // legitimate owner must never be locked out of their own recovery
-  await User.updateOne(
-    { _id: user._id },
-    { $set: { failedLoginAttempts: 0 }, $unset: { lockedUntil: 1 } },
-  );
+  await clearLockout(user._id.toString());
   audit.record(user._id, 'password_reset', { userAgent, ip });
   return { user, tokens: await sessionService.startSession(user, userAgent) };
 };

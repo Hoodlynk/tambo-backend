@@ -1,6 +1,7 @@
 import config from '../config/config';
 import PushToken from '../models/pushToken.model';
 import type { IPushToken, PushPlatform } from '../models/pushToken.model';
+import { isDuplicateKeyError } from '../utils/mongoErrors';
 
 /**
  * The registry of where a user's push notifications go. Deliberately
@@ -22,18 +23,33 @@ export const register = async (
 ): Promise<IPushToken> => {
   // upsert by token, reassigning across accounts (a device that switches
   // users must stop receiving the old account's alerts)
-  const row = await PushToken.findOneAndUpdate(
-    { token: input.token },
-    {
-      $set: {
-        user: userId,
-        platform: input.platform,
-        lastSeenAt: new Date(),
-        ...(input.userAgent ? { userAgent: input.userAgent } : {}),
-      },
+  const update = {
+    $set: {
+      user: userId,
+      platform: input.platform,
+      lastSeenAt: new Date(),
+      ...(input.userAgent ? { userAgent: input.userAgent } : {}),
     },
-    { new: true, upsert: true },
-  );
+  };
+  let row: IPushToken;
+  try {
+    row = await PushToken.findOneAndUpdate({ token: input.token }, update, {
+      new: true,
+      upsert: true,
+    });
+  } catch (error) {
+    // two concurrent first registrations of the same token: the upsert's
+    // find can miss for both, and the losing insert hits the unique index.
+    // Registration is documented as always-idempotent, so retry as an update.
+    if (!isDuplicateKeyError(error)) throw error;
+    const retried = await PushToken.findOneAndUpdate(
+      { token: input.token },
+      update,
+      { new: true },
+    );
+    if (!retried) throw error;
+    row = retried;
+  }
 
   // cap per user, evicting least-recently-seen. Not atomic with the upsert -
   // a racy extra row is a bounded, harmless overage the next register trims.

@@ -121,6 +121,16 @@ export const renderPackPdf = async (pack: EvidencePack): Promise<Buffer> => {
     (point.familiar
       ? ` - within familiar location "${point.familiar.label}" (~${point.familiar.distanceM}m from its centre)`
       : '');
+  /** Device capture time shown when it materially differs from receipt -
+   *  an offline device uploading a buffered trail must not misdate fixes. */
+  const timing = (point: (typeof pack.trail)[number]): string => {
+    const drift =
+      new Date(point.receivedAt).getTime() -
+      new Date(point.capturedAt).getTime();
+    return Math.abs(drift) > 60_000
+      ? `${point.receivedAt} (device reported ${point.capturedAt})`
+      : point.receivedAt;
+  };
   const mapsLine = (link: string): void => {
     doc.fillColor('#1a56db').text(`  ${link}`, { link });
     doc.fillColor('#000000');
@@ -132,7 +142,8 @@ export const renderPackPdf = async (pack: EvidencePack): Promise<Buffer> => {
     doc.text('No location points recorded for this episode.');
   } else if (pack.trailSummary.movement === 'static') {
     // one place under attack reads differently from a phone on the move -
-    // say so, and lead with the single location rather than a redundant list
+    // lead with the single location, but keep the full per-fix timeline
+    // below: continuity of reporting (and its gaps) is itself evidence
     doc.text(
       `The device remained in one place across ${pack.trail.length} location fixes.`,
     );
@@ -141,6 +152,10 @@ export const renderPackPdf = async (pack: EvidencePack): Promise<Buffer> => {
       `First fix ${firstFix.receivedAt}, latest fix ${latestFix.receivedAt}.`,
     );
     mapsLine(firstFix.mapsLink);
+    doc.moveDown(0.2).text('All fixes:');
+    for (const point of pack.trail) {
+      doc.text(`- ${timing(point)} [${point.source}]`);
+    }
   } else {
     if (pack.trailSummary.movement === 'moving') {
       doc.text('The device was MOVING during this episode.');
@@ -161,11 +176,21 @@ export const renderPackPdf = async (pack: EvidencePack): Promise<Buffer> => {
       doc.moveDown(0.2).text('Full trail:');
     }
     for (const point of pack.trail) {
-      doc.text(
-        `- ${point.receivedAt} [${point.source}]: ${describePoint(point)}`,
-      );
+      doc.text(`- ${timing(point)} [${point.source}]: ${describePoint(point)}`);
       mapsLine(point.mapsLink);
     }
+  }
+  if (pack.trailSummary.pointsWithoutFix > 0) {
+    doc
+      .fontSize(8)
+      .fillColor('#444444')
+      .text(
+        `${pack.trailSummary.pointsWithoutFix} further check-in(s) arrived ` +
+          'without a usable location fix; they are itemized in the signed ' +
+          'integrity manifest below.',
+      )
+      .fillColor('#000000')
+      .fontSize(10);
   }
 
   // --- Photos --------------------------------------------------------------------

@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import type { RequestHandler } from 'express';
+import config from '../config/config';
 import { logger } from '../utils/logger';
 
 /**
@@ -11,7 +12,10 @@ import { logger } from '../utils/logger';
 const SANE_ID = /^[\w.-]{4,64}$/;
 
 export const requestId: RequestHandler = (req, res, next) => {
-  const inbound = req.get('x-request-id');
+  // inbound ids are honoured only when a trusted proxy fronts the app -
+  // otherwise any client could stamp its requests with someone else's id and
+  // pollute exactly the forensic correlation this feature exists for
+  const inbound = config.trustProxy > 0 ? req.get('x-request-id') : undefined;
   const id = inbound && SANE_ID.test(inbound) ? inbound : crypto.randomUUID();
   req.requestId = id;
   res.set('X-Request-Id', id);

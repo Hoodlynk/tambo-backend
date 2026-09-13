@@ -10,6 +10,7 @@ import {
   setRefreshCookie,
 } from '../utils/refreshCookie';
 import type { LoginInput } from '../validation/auth.schema';
+import { isChallenge, sendChallenge, userAgentOf } from './auth.controller';
 
 /**
  * The browser (PWA) auth surface. Same services, same session machinery as
@@ -17,8 +18,6 @@ import type { LoginInput } from '../validation/auth.schema';
  * travels: an httpOnly cookie instead of the JSON body. The access token is
  * still returned in the body; the PWA holds it in memory only.
  */
-
-const userAgentOf = (req: Request): string | undefined => req.get('user-agent');
 
 /** Cookie set, refreshToken withheld from the body - the surface's whole point. */
 const sendWebAuthResult = (
@@ -53,9 +52,9 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     userAgentOf(req),
     req.ip,
   );
-  // unproven mailbox: same challenge envelope as mobile; no cookie yet
-  if ('challengeId' in result) {
-    res.status(200).json({ challenge: result });
+  // unproven mailbox: the SAME challenge envelope as mobile; no cookie yet
+  if (isChallenge(result)) {
+    sendChallenge(res, result);
     return;
   }
   sendWebAuthResult(res, result);

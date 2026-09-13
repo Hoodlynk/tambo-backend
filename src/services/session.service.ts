@@ -197,10 +197,17 @@ export const refresh = async (
 
 /** Revokes a single session. Idempotent: unknown or already-revoked tokens are a no-op. */
 export const revokeByToken = async (token: string): Promise<void> => {
-  await RefreshToken.updateOne(
+  const revoked = await RefreshToken.findOneAndUpdate(
     { tokenHash: hashOpaqueToken(token), revokedAt: { $exists: false } },
     { $set: { revokedAt: new Date() } },
   );
+  // logout belongs on the owner's security timeline like every other
+  // revocation - an incomplete ledger is worse than none
+  if (revoked) {
+    audit.record(revoked.user, 'session_revoked', {
+      meta: { sessionId: revoked._id.toString(), via: 'logout' },
+    });
+  }
 };
 
 /**

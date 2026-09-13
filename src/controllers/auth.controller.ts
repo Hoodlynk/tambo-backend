@@ -20,7 +20,8 @@ import type {
  * casts below are safe and no controller re-checks shapes.
  */
 
-const userAgentOf = (req: Request): string | undefined => req.get('user-agent');
+export const userAgentOf = (req: Request): string | undefined =>
+  req.get('user-agent');
 
 /** The one place the auth response envelope is shaped. */
 const sendAuthResult = (
@@ -34,7 +35,7 @@ const sendAuthResult = (
 };
 
 /** Pending-OTP envelope: the client's next move is POST /auth/otp/verify. */
-const sendChallenge = (
+export const sendChallenge = (
   res: Response,
   challenge: otpService.ChallengeSummary,
   status = 200,
@@ -45,7 +46,7 @@ const sendChallenge = (
 // --- Credential entry points -------------------------------------------------
 
 /** Register/login can end in a session OR a pending OTP challenge. */
-const isChallenge = (
+export const isChallenge = (
   result: AuthResult | otpService.ChallengeSummary,
 ): result is otpService.ChallengeSummary => 'challengeId' in result;
 

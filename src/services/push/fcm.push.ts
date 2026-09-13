@@ -9,11 +9,15 @@ import { logger } from '../../utils/logger';
  * configured (tests run noop; the SDK is heavyweight).
  */
 
-/** FCM error codes that mean "this token will never work again - delete it". */
+/**
+ * FCM error codes that mean "this TOKEN will never work again - delete it".
+ * Deliberately NOT including 'messaging/invalid-argument': FCM also returns
+ * that for a malformed MESSAGE, and a payload bug must never mass-delete
+ * healthy registrations (that would silently disable theft alerts).
+ */
 const DEAD_TOKEN_CODES = new Set([
   'messaging/registration-token-not-registered',
   'messaging/invalid-registration-token',
-  'messaging/invalid-argument',
 ]);
 
 type FirebaseAdmin = typeof import('firebase-admin');
@@ -23,13 +27,17 @@ let admin: FirebaseAdmin | null = null;
 const firebase = (): FirebaseAdmin => {
   if (admin) return admin;
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  admin = require('firebase-admin') as FirebaseAdmin;
+  const loaded = require('firebase-admin') as FirebaseAdmin;
   const serviceAccount = JSON.parse(
     Buffer.from(config.push.fcmServiceAccountJson, 'base64').toString('utf8'),
   ) as object;
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
+  loaded.initializeApp({
+    credential: loaded.credential.cert(serviceAccount),
   });
+  // cache only AFTER init succeeds: a failed first init (bad credential)
+  // must be retried and keep surfacing its real cause, not a half-initialized
+  // module and "default app does not exist" forever after
+  admin = loaded;
   return admin;
 };
 
