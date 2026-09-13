@@ -12,6 +12,8 @@ declare global {
       };
       /** Set by requireDeviceToken (evidence ingest). Absent elsewhere. */
       device?: IDevice;
+      /** Set by the requestId middleware on every request. */
+      requestId?: string;
     }
   }
 }

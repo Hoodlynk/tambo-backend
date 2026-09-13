@@ -85,6 +85,16 @@ interface Config {
     /** Disable in tests that are not specifically exercising limits. */
     enabled: boolean;
   };
+  log: {
+    /** pino level; 'silent' under test unless LOG_LEVEL says otherwise. */
+    level: string;
+  };
+  lockout: {
+    /** Consecutive failed password logins before the account locks. */
+    threshold: number;
+    /** How long a lock lasts. Password reset clears it early. */
+    durationMinutes: number;
+  };
   push: {
     /** 'console' logs to stdout, 'noop' discards; 'fcm' is the real provider. */
     driver: PushDriver;
@@ -319,6 +329,13 @@ const config: Config = {
       .split(',')
       .map((origin) => origin.trim())
       .filter(Boolean),
+  },
+  log: {
+    level: process.env.LOG_LEVEL || (rawNodeEnv === 'test' ? 'silent' : 'info'),
+  },
+  lockout: {
+    threshold: Number(process.env.LOCKOUT_THRESHOLD) || 10,
+    durationMinutes: Number(process.env.LOCKOUT_DURATION_MINUTES) || 15,
   },
   push: {
     driver: parsePushDriver(),

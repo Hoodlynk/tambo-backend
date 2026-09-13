@@ -115,6 +115,13 @@ router.post('/logout-all', requireAuth, asyncHandler(authController.logoutAll));
 
 router.get('/sessions', requireAuth, asyncHandler(authController.listSessions));
 
+// the audit trail: "has anything happened to my account?"
+router.get(
+  '/security-events',
+  requireAuth,
+  asyncHandler(authController.securityEvents),
+);
+
 router.delete(
   '/sessions/:id',
   requireAuth,

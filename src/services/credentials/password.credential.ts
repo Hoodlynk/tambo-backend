@@ -6,6 +6,7 @@ import type { IUser } from '../../models/user.model';
 import { AppError } from '../../utils/appError';
 import { isDuplicateKeyError } from '../../utils/mongoErrors';
 import { generateOpaqueToken, hashOpaqueToken } from '../../utils/tokens';
+import * as audit from '../audit.service';
 import { mailer } from '../mailer';
 import * as otpService from '../otp.service';
 import type { ChallengeSummary } from '../otp.service';
@@ -18,6 +19,7 @@ import type {
   RegisterInput,
   ResetPasswordInput,
 } from '../../validation/auth.schema';
+import { logger } from '../../utils/logger';
 
 /**
  * Email + password credentials. This module is the ONLY place that knows about
@@ -116,13 +118,63 @@ export const register = async (
  * instead - the password alone must not start a session for a mailbox nobody
  * has demonstrated owning. Verifying the code heals emailVerifiedAt.
  */
+/**
+ * Counts a failed login and locks the account at the threshold. Lockout sits
+ * ON TOP of rate limiting: the limiter is keyed per email+IP, so a
+ * distributed guess (many IPs, one account) slides under it - this counter is
+ * per ACCOUNT and catches exactly that. Findandupdate is atomic, so parallel
+ * failures cannot both slip past the threshold.
+ */
+const registerFailedLogin = async (
+  user: IUser,
+  context: audit.AuditContext,
+): Promise<void> => {
+  audit.record(user._id, 'login_failed', context);
+  const updated = await User.findByIdAndUpdate(
+    user._id,
+    { $inc: { failedLoginAttempts: 1 } },
+    { new: true },
+  );
+  if (updated && updated.failedLoginAttempts >= config.lockout.threshold) {
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          lockedUntil: new Date(
+            Date.now() + config.lockout.durationMinutes * 60 * 1000,
+          ),
+          failedLoginAttempts: 0,
+        },
+      },
+    );
+    audit.record(user._id, 'account_locked', context);
+  }
+};
+
 export const login = async (
   input: LoginInput,
   userAgent?: string,
+  ip?: string,
 ): Promise<AuthResult | ChallengeSummary> => {
+  const context: audit.AuditContext = { userAgent, ip };
   const user = await User.findOne({ email: input.email }).select(
     '+passwordHash',
   );
+
+  // Locked accounts answer 423 regardless of the password: running the
+  // comparison would let the lockout be used as a guessing oracle. The small
+  // existence leak (423 needs a real account) is accepted and documented in
+  // docs/security.md; reset-password clears the lock early.
+  if (user?.lockedUntil && user.lockedUntil > new Date()) {
+    throw new AppError(
+      423,
+      'Too many failed sign-in attempts. Try again later, or reset your password.',
+      'account_locked',
+      undefined,
+      Math.ceil((user.lockedUntil.getTime() - Date.now()) / 1000),
+    );
+  }
+
   const matches = await bcrypt.compare(
     input.password,
     user?.passwordHash ?? DUMMY_HASH,
@@ -131,16 +183,26 @@ export const login = async (
   // One error for both "no such account" and "wrong password" - revealing which
   // would turn the login endpoint into an account-existence oracle.
   if (!user || !matches) {
+    if (user) await registerFailedLogin(user, context);
     throw AppError.unauthorized(
       'Invalid email or password.',
       'invalid_credentials',
     );
   }
 
+  if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+    await User.updateOne(
+      { _id: user._id },
+      { $set: { failedLoginAttempts: 0 }, $unset: { lockedUntil: 1 } },
+    );
+  }
+
   if (!user.emailVerifiedAt) {
+    audit.record(user._id, 'login_challenged', context);
     return otpService.createChallenge(user, 'login', { userAgent });
   }
 
+  audit.record(user._id, 'login_succeeded', context);
   return { user, tokens: await sessionService.startSession(user, userAgent) };
 };
 
@@ -234,9 +296,14 @@ export const changeEmail = async (
  * the newest link works. Link-based rather than challenge-based on purpose:
  * returning a challengeId here would leak which emails are registered.
  */
-export const requestPasswordReset = async (email: string): Promise<void> => {
+export const requestPasswordReset = async (
+  email: string,
+  ip?: string,
+): Promise<void> => {
   const user = await User.findOne({ email });
   if (!user) return;
+
+  audit.record(user._id, 'password_reset_requested', { ip });
 
   await PasswordResetToken.updateMany(
     { user: user._id, usedAt: { $exists: false } },
@@ -273,7 +340,7 @@ export const requestPasswordReset = async (email: string): Promise<void> => {
       ].join('\n'),
     })
     .catch((error) => {
-      console.error('Failed to send password reset email:', error);
+      logger.error({ err: error }, 'failed to send password reset email');
     });
 };
 
@@ -281,6 +348,7 @@ export const requestPasswordReset = async (email: string): Promise<void> => {
 export const resetPassword = async (
   input: ResetPasswordInput,
   userAgent?: string,
+  ip?: string,
 ): Promise<AuthResult> => {
   // Atomic claim, same discipline as refresh rotation: only one concurrent
   // presenter of this token can flip usedAt, so the token is truly single-use.
@@ -309,5 +377,12 @@ export const resetPassword = async (
   }
 
   await setPassword(user, input.password);
+  // proving mailbox control via the reset link also clears any lockout - the
+  // legitimate owner must never be locked out of their own recovery
+  await User.updateOne(
+    { _id: user._id },
+    { $set: { failedLoginAttempts: 0 }, $unset: { lockedUntil: 1 } },
+  );
+  audit.record(user._id, 'password_reset', { userAgent, ip });
   return { user, tokens: await sessionService.startSession(user, userAgent) };
 };

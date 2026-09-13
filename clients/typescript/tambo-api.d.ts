@@ -236,6 +236,15 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
+                /** @description `account_locked` — Too many consecutive failed logins; retry after retryAfter seconds, or reset the password (which clears the lock). */
+                423: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
                 /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
                 429: {
                     headers: {
@@ -1158,6 +1167,66 @@ export interface paths {
                                 expiresAt: string;
                                 /** @description True for the session making this request. */
                                 current: boolean;
+                            }[];
+                        };
+                    };
+                };
+                /** @description `unauthorized` — Invalid/expired access token (code "missing_token" when the header is absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/security-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The account's recent security activity (audit trail)
+         * @description Newest first, capped at 50. Types cover logins (success/failure/OTP challenge), OTP outcomes, password/email changes, resets, session revocations, and lockouts.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            events: {
+                                /** @enum {string} */
+                                type: "login_succeeded" | "login_failed" | "login_challenged" | "otp_verified" | "otp_failed" | "password_changed" | "email_changed" | "password_reset_requested" | "password_reset" | "sessions_revoked_all" | "session_revoked" | "account_locked";
+                                /** @description ISO-8601 timestamp */
+                                at: string;
+                                ip?: string;
+                                userAgent?: string;
+                                meta?: {
+                                    [key: string]: unknown;
+                                };
                             }[];
                         };
                     };

@@ -5,6 +5,7 @@ import RefreshToken from '../models/refreshToken.model';
 import User from '../models/user.model';
 import type { IUser } from '../models/user.model';
 import { AppError } from '../utils/appError';
+import * as audit from './audit.service';
 import {
   generateOpaqueToken,
   hashOpaqueToken,
@@ -219,6 +220,7 @@ export const revokeAllForUser = async (userId: string): Promise<void> => {
     { user: userId, revokedAt: { $exists: false } },
     { $set: { revokedAt: new Date() } },
   );
+  audit.record(userId, 'sessions_revoked_all');
 };
 
 /** Powers a "signed in on these devices" screen. */
@@ -256,4 +258,5 @@ export const revokeSessionById = async (
   if (result.matchedCount === 0) {
     throw AppError.notFound('Session not found.', 'session_not_found');
   }
+  audit.record(userId, 'session_revoked', { meta: { sessionId } });
 };

@@ -8,9 +8,11 @@ import type { IOtpChallenge, OtpPurpose } from '../models/otpChallenge.model';
 import User from '../models/user.model';
 import type { IUser } from '../models/user.model';
 import { AppError } from '../utils/appError';
+import * as audit from './audit.service';
 import { mailer } from './mailer';
 import * as sessionService from './session.service';
 import type { TokenPair } from './session.service';
+import { logger } from '../utils/logger';
 
 /**
  * Email OTP: every authentication-changing action (signup, login, password
@@ -81,7 +83,7 @@ const dispatchCode = (
       text: codeEmailText(name, purpose, code),
     })
     .catch((error) => {
-      console.error(`Failed to send ${purpose} OTP email:`, error);
+      logger.error({ err: error, purpose }, 'failed to send OTP email');
     });
 };
 
@@ -224,7 +226,9 @@ const applyPurpose = async (
   challenge: IOtpChallenge,
   user: IUser,
   userAgent?: string,
+  ip?: string,
 ): Promise<VerifiedSession> => {
+  const context = { userAgent, ip };
   switch (challenge.purpose) {
     case 'signup':
     case 'login': {
@@ -236,6 +240,10 @@ const applyPurpose = async (
       }
       // and binds any buddy invitations that were waiting on this email
       await buddyService.bindPendingInvites(user);
+      audit.record(user._id, 'login_succeeded', {
+        ...context,
+        meta: { via: challenge.purpose },
+      });
       break;
     }
 
@@ -249,6 +257,7 @@ const applyPurpose = async (
       user.passwordHash = challenge.pendingPasswordHash;
       await user.save();
       await revokeCredentialArtifacts(user._id.toString());
+      audit.record(user._id, 'password_changed', context);
       break;
     }
 
@@ -274,6 +283,7 @@ const applyPurpose = async (
       // the login identifier changed - and reset links mailed to the OLD
       // address must die with it
       await revokeCredentialArtifacts(user._id.toString());
+      audit.record(user._id, 'email_changed', context);
       break;
     }
   }
@@ -295,6 +305,7 @@ export const verifyChallenge = async (
   challengeId: string,
   code: string,
   userAgent?: string,
+  ip?: string,
 ): Promise<VerifiedSession> => {
   const challenge = await OtpChallenge.findOne({
     _id: challengeId,
@@ -310,6 +321,11 @@ export const verifyChallenge = async (
   }
 
   if (!(await bcrypt.compare(code, challenge.codeHash))) {
+    audit.record(challenge.user, 'otp_failed', {
+      userAgent,
+      ip,
+      meta: { purpose: challenge.purpose },
+    });
     const updated = await OtpChallenge.findOneAndUpdate(
       { _id: challenge._id, consumedAt: { $exists: false } },
       { $inc: { attempts: 1 } },
@@ -349,5 +365,10 @@ export const verifyChallenge = async (
     );
   }
 
-  return applyPurpose(claimed, user, userAgent);
+  audit.record(user._id, 'otp_verified', {
+    userAgent,
+    ip,
+    meta: { purpose: challenge.purpose },
+  });
+  return applyPurpose(claimed, user, userAgent, ip);
 };

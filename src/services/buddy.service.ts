@@ -7,6 +7,7 @@ import { AppError } from '../utils/appError';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
 import { mailer } from './mailer';
 import type { BuddyInput } from '../validation/buddy.schema';
+import { logger } from '../utils/logger';
 
 /**
  * Buddy relationships: owner -> a Tambo user who receives their theft alerts.
@@ -70,7 +71,7 @@ const sendInviteEmail = (
   void mailer
     .send({ to, subject: `${ownerName} wants you as their Tambo buddy`, text })
     .catch((error) => {
-      console.error('Failed to send buddy invite email:', error);
+      logger.error({ err: error }, 'failed to send buddy invite email');
     });
 };
 

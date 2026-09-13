@@ -195,6 +195,13 @@ export const endpoints: Endpoint[] = [
         description: 'Same code for wrong password AND unknown email, by design.',
       },
       { status: 401, code: 'no_password_credential' },
+      {
+        status: 423,
+        code: 'account_locked',
+        description:
+          'Too many consecutive failed logins; retry after retryAfter ' +
+          'seconds, or reset the password (which clears the lock).',
+      },
       rateLimited,
     ],
   },
@@ -386,6 +393,21 @@ export const endpoints: Endpoint[] = [
     summary: 'Active sessions (devices) for this account',
     auth: 'bearer',
     responses: [{ status: 200, description: 'OK.', schema: r.sessionsResponse }],
+    errors: [unauthorized],
+  },
+  {
+    method: 'get',
+    path: '/api/v1/auth/security-events',
+    tag: 'Auth',
+    summary: "The account's recent security activity (audit trail)",
+    description:
+      'Newest first, capped at 50. Types cover logins (success/failure/OTP ' +
+      'challenge), OTP outcomes, password/email changes, resets, session ' +
+      'revocations, and lockouts.',
+    auth: 'bearer',
+    responses: [
+      { status: 200, description: 'OK.', schema: r.securityEventsResponse },
+    ],
     errors: [unauthorized],
   },
   {

@@ -2,11 +2,12 @@ import app from './app';
 import config from './config/config';
 import connectDB from './config/database';
 import { sweepExpiredMedia } from './services/evidence.service';
+import { logger } from './utils/logger';
 
 connectDB()
   .then(() => {
     app.listen(config.port, () => {
-      console.log(`Server running on port ${config.port}`);
+      logger.info({ port: config.port }, 'server listening');
       // OTP codes, alerts and packs all ride on this - a wrong driver here is
       // exactly the "OTP is down but nothing errors" incident. Say it at boot.
       console.log(
@@ -22,11 +23,11 @@ connectDB()
     const HOURLY = 60 * 60 * 1000;
     setInterval(() => {
       sweepExpiredMedia().catch((error) => {
-        console.error('Media retention sweep failed:', error);
+        logger.error({ err: error }, 'media retention sweep failed');
       });
     }, HOURLY).unref();
   })
   .catch((err) => {
-    console.error('Failed to start server:', err);
+    logger.error({ err }, 'failed to start server');
     process.exit(1);
   });

@@ -88,6 +88,31 @@ export const sessionsResponse = z.object({
   ),
 });
 
+export const securityEventsResponse = z.object({
+  events: z.array(
+    z.object({
+      type: z.enum([
+        'login_succeeded',
+        'login_failed',
+        'login_challenged',
+        'otp_verified',
+        'otp_failed',
+        'password_changed',
+        'email_changed',
+        'password_reset_requested',
+        'password_reset',
+        'sessions_revoked_all',
+        'session_revoked',
+        'account_locked',
+      ]),
+      at: isoDate,
+      ip: z.string().optional(),
+      userAgent: z.string().optional(),
+      meta: z.looseObject({}).optional(),
+    }),
+  ),
+});
+
 // --- Devices & episodes --------------------------------------------------------
 
 export const device = z.looseObject({

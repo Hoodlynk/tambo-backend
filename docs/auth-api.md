@@ -105,6 +105,7 @@ the same call returns a `login` challenge instead — completing it heals
 | Code | Status | Meaning |
 |---|---|---|
 | `invalid_credentials` | 401 | Wrong password **or** unknown email — deliberately indistinguishable |
+| `account_locked` | 423 | Too many consecutive failed logins; retry after `retryAfter` seconds, or reset the password (clears the lock) |
 | `rate_limited` | 429 | 5 per 15 min per email+IP |
 
 ## POST /otp/verify

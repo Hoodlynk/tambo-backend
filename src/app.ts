@@ -16,6 +16,7 @@ import legalRoutes from './routes/v1/legal.routes';
 import planRoutes from './routes/v1/plan.routes';
 import pushTokenRoutes from './routes/v1/pushToken.routes';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler';
+import { requestId, requestLog } from './middlewares/requestId';
 
 const app = express();
 
@@ -28,6 +29,10 @@ app.set('trust proxy', config.trustProxy);
 
 app.disable('x-powered-by');
 app.use(helmet());
+
+// ids first so even a helmet/CORS-level rejection is correlatable
+app.use(requestId);
+app.use(requestLog);
 
 // Test runs only: close every connection after its response. supertest spins
 // up an ephemeral server per request, and socket reuse across those under

@@ -2,6 +2,7 @@ import { mailer } from './mailer';
 import type { MailMessage } from './mailer';
 import { pusher } from './push';
 import * as pushTokenService from './pushToken.service';
+import { logger } from '../utils/logger';
 
 /**
  * "Notify this user" - the channel fan-out in one place. Email goes to an
@@ -23,7 +24,7 @@ export interface PushContent {
 
 export const sendEmail = (message: MailMessage): void => {
   void mailer.send(message).catch((error) => {
-    console.error(`Failed to send email to ${message.to}:`, error);
+    logger.error({ err: error, to: message.to }, 'failed to send email');
   });
 };
 
@@ -35,6 +36,6 @@ export const sendPush = (userId: string, content: PushContent): void => {
     const result = await pusher.send({ tokens, ...content });
     await pushTokenService.pruneTokens(result.invalidTokens);
   })().catch((error) => {
-    console.error(`Failed to push-notify user ${userId}:`, error);
+    logger.error({ err: error, userId }, 'failed to push-notify user');
   });
 };

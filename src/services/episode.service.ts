@@ -9,6 +9,7 @@ import { AppError } from '../utils/appError';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
 import * as deliveryService from './delivery.service';
 import * as deviceService from './device.service';
+import { logger } from '../utils/logger';
 
 /**
  * Opens an episode for a device, or returns the one already open - both the
@@ -46,7 +47,7 @@ export const openEpisode = async (
     // converging openers cannot double-alert. Fire-and-forget: alerting must
     // never fail the request that detected the theft.
     void deliveryService.sendFirstAlert(episode, device).catch((error) => {
-      console.error('Failed to dispatch first alert:', error);
+      logger.error({ err: error }, 'failed to dispatch first alert');
     });
 
     return { episode, created: true };

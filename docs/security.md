@@ -108,22 +108,42 @@ Every request body is parsed by a zod schema that **strips unknown keys** before
 anything reaches a model. Posting `role: "admin"` to `/register` is inert, and
 there is a test asserting exactly that.
 
+## Account lockout (on top of rate limiting)
+
+Rate limiting is keyed per email+IP, so a distributed guess (many IPs, one
+account) slides under it. The lockout counter is per ACCOUNT: after
+`LOCKOUT_THRESHOLD` consecutive failed password logins the account answers
+**423 `account_locked`** (with `retryAfter`) for `LOCKOUT_DURATION_MINUTES`,
+regardless of the password — running the comparison while locked would turn
+the lock into a guessing oracle. A successful login resets the counter, and a
+**password reset clears the lock early** (mailbox control must always let the
+real owner back in). Trade-off, stated plainly: a 423 confirms the account
+exists to someone who already has the email; accepted, since the alternative
+(silent lock) turns lockout into an unexplainable login failure for the owner.
+Locks and failures land in the audit trail.
+
+## Observability
+
+- **Structured logs** (pino, JSON lines): every request gets an
+  `X-Request-Id` (inbound ids honoured when sane, echoed always), one line per
+  completed request, one `warn` per expected 4xx, full error objects for 500s.
+  Redaction is configured, but the primary rule is that tokens, codes, and
+  password material are never passed to a log call at all.
+- **Auth-event audit trail** (`authEvent` collection, 365-day TTL,
+  append-only): logins (success/failure/OTP-challenged), OTP outcomes,
+  password/email changes, reset requests and resets, session revocations,
+  lockouts — with ip/userAgent. Owner-visible at
+  `GET /api/auth/security-events`; writes are fire-and-forget so auditing can
+  never break auth.
+
 ## Known gaps
 
 Deliberate, and worth revisiting before public launch:
 
-1. **No email verification.** Anyone can register with an address they do not
-   control. Password reset still works, because email is treated as an
-   identifier rather than a proven channel. Adding verification later is
-   additive — the `emailVerifiedAt` field already exists.
-2. **No account lockout**, only rate limiting. A patient distributed attacker
-   with many IPs is slowed, not stopped.
-3. **No 2FA.**
-4. **Access tokens cannot be revoked mid-life** (see architecture.md).
-5. **Minimal auth logging only.** Every expected 4xx (failed login, replay,
-   429) emits one structured `console.warn` line, so attacks are at least
-   visible - but there is no real logger, request ids, or retention story yet.
-6. **Secrets come from the environment**; there is no integration with a managed
+1. **No 2FA (TOTP).** Lower priority: every login on an unproven mailbox is
+   already OTP-confirmed, and password logins are lockout-protected.
+2. **Access tokens cannot be revoked mid-life** (see architecture.md).
+3. **Secrets come from the environment**; there is no integration with a managed
    secret store, and no key rotation scheme for `JWT_ACCESS_SECRET` — rotating
    it invalidates every access token immediately (refresh tokens survive,
    because they are database-backed rather than signed).

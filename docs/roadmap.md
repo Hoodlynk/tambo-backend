@@ -5,7 +5,19 @@ Last updated: 2026-09-13.
 
 **Active program (approved 2026-09-13)**: depth-first client-readiness &
 completion plan — Phase 0 API contract (✅) → 1 PWA cookie auth (✅) →
-2 FCM push (✅) → 3 entitlements (✅) → 4 observability → 5 CI → 6 onboarding.
+2 FCM push (✅) → 3 entitlements (✅) → 4 observability (✅) → 5 CI → 6 onboarding.
+
+### ✅ Phase 4 — Observability & account protection (2026-09-13)
+pino structured logging (request-id middleware honouring sane inbound
+`X-Request-Id`, echoed on every response; one line per request; every console
+call in src/ replaced except the by-design console drivers and the pre-logger
+config boot warning). Append-only auth-event audit trail (365d TTL) covering
+logins/OTP/password/email/reset/revocations/lockouts, owner-visible at
+`GET /api/auth/security-events`, fire-and-forget writes. Account lockout ON
+TOP of rate limiting: per-account counter (catches distributed guessing that
+per-email+IP limits miss), 423 `account_locked` + retryAfter, success resets,
+password reset clears the lock. security.md rewritten accordingly (email
+verification + lockout + logging removed from Known gaps).
 
 ### ✅ Phase 3 — Plans & entitlements (2026-09-13; billing webhook parked as 3b)
 `User.plan` (free/pro/family) + `planExpiresAt`; ONE matrix in

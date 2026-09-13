@@ -33,6 +33,10 @@ export interface IUser extends Document<Types.ObjectId> {
    * the bulk revoke ran. Checked at use time in session.service.refresh.
    */
   sessionsInvalidatedAt?: Date;
+  /** Consecutive failed password logins; reset on success and on lock. */
+  failedLoginAttempts: number;
+  /** While in the future, password login answers 423 account_locked. */
+  lockedUntil?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -60,6 +64,8 @@ const userSchema = new Schema<IUser>(
     emailVerifiedAt: { type: Date },
     phoneVerifiedAt: { type: Date },
     sessionsInvalidatedAt: { type: Date },
+    failedLoginAttempts: { type: Number, default: 0 },
+    lockedUntil: { type: Date },
   },
   {
     timestamps: true,

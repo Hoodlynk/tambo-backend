@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import config from './config';
+import { logger } from '../utils/logger';
 
 const connectDB = async (): Promise<void> => {
   if (!config.mongodbUri) {
@@ -17,9 +18,9 @@ const connectDB = async (): Promise<void> => {
       mongoose.modelNames().map((name) => mongoose.model(name).createIndexes()),
     );
 
-    console.log('MongoDB connected successfully');
+    logger.info('MongoDB connected');
   } catch (error) {
-    console.error('MongoDB connection error:', error);
+    logger.error({ err: error }, 'MongoDB connection error');
     throw error;
   }
 };

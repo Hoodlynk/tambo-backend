@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import * as auditService from '../services/audit.service';
 import * as passwordCredential from '../services/credentials/password.credential';
 import type { AuthResult } from '../services/credentials/password.credential';
 import * as otpService from '../services/otp.service';
@@ -64,6 +65,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   const result = await passwordCredential.login(
     req.body as LoginInput,
     userAgentOf(req),
+    req.ip,
   );
   // a challenge means the mailbox was never proven - verify completes login
   if (isChallenge(result)) sendChallenge(res, result);
@@ -121,7 +123,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
   };
   sendAuthResult(
     res,
-    await otpService.verifyChallenge(challengeId, code, userAgentOf(req)),
+    await otpService.verifyChallenge(challengeId, code, userAgentOf(req), req.ip),
   );
 };
 
@@ -193,7 +195,7 @@ export const forgotPassword = async (
   res: Response,
 ): Promise<void> => {
   const { email } = req.body as { email: string };
-  await passwordCredential.requestPasswordReset(email);
+  await passwordCredential.requestPasswordReset(email, req.ip);
   res.status(204).send();
 };
 
@@ -206,6 +208,24 @@ export const resetPassword = async (
     await passwordCredential.resetPassword(
       req.body as ResetPasswordInput,
       userAgentOf(req),
+      req.ip,
     ),
   );
+};
+
+/** The owner's recent security activity (audit trail), newest first. */
+export const securityEvents = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const events = await auditService.listForUser(authContext(req).userId);
+  res.status(200).json({
+    events: events.map((event) => ({
+      type: event.type,
+      at: event.at.toISOString(),
+      ...(event.ip ? { ip: event.ip } : {}),
+      ...(event.userAgent ? { userAgent: event.userAgent } : {}),
+      ...(event.meta ? { meta: event.meta } : {}),
+    })),
+  });
 };

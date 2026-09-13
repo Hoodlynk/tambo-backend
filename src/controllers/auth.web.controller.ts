@@ -51,6 +51,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   const result = await passwordCredential.login(
     req.body as LoginInput,
     userAgentOf(req),
+    req.ip,
   );
   // unproven mailbox: same challenge envelope as mobile; no cookie yet
   if ('challengeId' in result) {
@@ -67,7 +68,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
   };
   sendWebAuthResult(
     res,
-    await otpService.verifyChallenge(challengeId, code, userAgentOf(req)),
+    await otpService.verifyChallenge(challengeId, code, userAgentOf(req), req.ip),
   );
 };
 

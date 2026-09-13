@@ -1,5 +1,6 @@
 import type { Pusher, PushMessage, PushResult } from './push.interface';
 import config from '../../config/config';
+import { logger } from '../../utils/logger';
 
 /**
  * Firebase Cloud Messaging: one provider for Android (native), the PWA (web
@@ -50,7 +51,7 @@ class FcmPusher implements Pusher {
         invalidTokens.push(token);
       } else if (result.error) {
         // transient (quota, unavailable): keep the token, log the failure
-        console.error(`FCM send failed (${code ?? 'unknown'}):`, result.error);
+        logger.error({ err: result.error, fcmCode: code }, 'FCM send failed');
       }
     });
 

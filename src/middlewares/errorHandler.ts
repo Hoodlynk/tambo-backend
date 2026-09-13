@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import config from '../config/config';
 import { AppError } from '../utils/appError';
+import { logger } from '../utils/logger';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
 
 /** Anything that falls through to here without a matching route. */
@@ -60,20 +61,18 @@ export const errorHandler = (
 
   if (known) {
     // One structured line per expected failure, so auth attacks (credential
-    // stuffing, token replay) are visible in logs. Silent in tests.
-    if (config.nodeEnv !== 'test') {
-      console.warn(
-        JSON.stringify({
-          level: 'warn',
-          status: known.statusCode,
-          code: known.code,
-          method: req.method,
-          path: req.originalUrl,
-          ip: req.ip,
-          time: new Date().toISOString(),
-        }),
-      );
-    }
+    // stuffing, token replay) are visible in logs. Silent in tests (level).
+    logger.warn(
+      {
+        requestId: req.requestId,
+        status: known.statusCode,
+        code: known.code,
+        method: req.method,
+        path: req.originalUrl,
+        ip: req.ip,
+      },
+      'request failed',
+    );
 
     if (known.retryAfterSeconds !== undefined) {
       res.set('Retry-After', String(known.retryAfterSeconds));
@@ -92,7 +91,10 @@ export const errorHandler = (
   // Unrecognised errors are bugs: log them in full, tell the client nothing.
   // `isDevelopment` is true only when NODE_ENV is EXPLICITLY development, so a
   // deployment that forgets to set NODE_ENV does not leak internals.
-  console.error(err.stack ?? err);
+  logger.error(
+    { requestId: req.requestId, err, method: req.method, path: req.originalUrl },
+    'unhandled error',
+  );
   res.status(500).json({
     code: 'internal_error',
     message: 'Something went wrong!',
