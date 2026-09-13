@@ -17,7 +17,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "mail:test": "ts-node --files scripts/mail-test.ts",
     "openapi": "ts-node --files scripts/openapi.ts",
-    "client:ts": "openapi-typescript openapi/openapi.json -o clients/typescript/tambo-api.d.ts"
+    "client:ts": "openapi-typescript openapi/openapi.json -o clients/typescript/tambo-api.d.ts",
+    "seed:dev": "NODE_ENV=development ts-node --files scripts/seed-dev.ts"
   },
   "keywords": [],
   "author": "",

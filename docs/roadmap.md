@@ -6,7 +6,16 @@ Last updated: 2026-09-13.
 **Active program (approved 2026-09-13)**: depth-first client-readiness &
 completion plan — Phase 0 API contract (✅) → 1 PWA cookie auth (✅) →
 2 FCM push (✅) → 3 entitlements (✅) → 4 observability (✅) → 5 CI (✅) →
-6 onboarding.
+6 onboarding (✅). **The program is complete.**
+
+### ✅ Phase 6 — Onboarding & readability (2026-09-13)
+CLAUDE.md (the working rules, incl. the OpenAPI-registry and entitlements
+disciplines), ONBOARDING.md (running + seeded backend + typed client in <10
+minutes, platform capability matrix), `npm run seed:dev` (verified pro user,
+accepted legal docs, enrolled device + ingest token, open episode, located
+unlock + moving trail; development-only; logic guarded by tests/seed.test.ts),
+README rewritten around the one-API/three-clients story, .DS_Store
+gitignored, iCloud "* 2" duplicate artifacts purged from dist/.
 
 ### ✅ Phase 5 — CI & coverage gates (2026-09-13)
 GitHub Actions on push/PR: typecheck, lint, format:check, full jest with a

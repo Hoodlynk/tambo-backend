@@ -1,27 +1,36 @@
 # Tambo Backend
 
-Mobile app backend: **Express + TypeScript + Mongoose**, with JWT access tokens
-and rotating refresh tokens.
+The backend of the Tambo anti-theft product: **Express + TypeScript +
+Mongoose**. A phone theft becomes a filed, evidenced, insurer-ready pack:
+enrol device → evidence uploads → episode opens (threshold or owner) → first
+alert (email + push) in seconds → Ed25519-signed evidence pack by email.
+
+**One API, three clients.** The contract is an OpenAPI spec generated from
+the same zod schemas the server validates with (`GET /api/openapi.json`,
+committed at `openapi/openapi.json`); clients consume generated types, never
+hand-written ones ([docs/client-generation.md](docs/client-generation.md)).
+
+| | Android (RN) | iOS | PWA |
+|---|---|---|---|
+| Failed-unlock capture + evidence upload | ✓ | — (platform ceiling) | — |
+| Owner console: devices, episodes, trail, pack, buddies, plan | ✓ | ✓ | ✓ |
+| Push alerts (FCM) | native | APNs relay | web push |
+| Sessions | refresh token in body | refresh token in body | httpOnly cookie (`/api/auth/web`) |
 
 ## Quick start
 
+New here? **[ONBOARDING.md](ONBOARDING.md)** gets you to a running, seeded
+backend + a typed client in <10 minutes. The short version:
+
 ```bash
 npm install
-cp .env.example .env          # then fill in MONGODB_URI and JWT_ACCESS_SECRET
+cp .env.example .env          # fill in MONGODB_URI and JWT_ACCESS_SECRET
 npm run dev                   # http://localhost:3000
-```
-
-Generate a secret:
-
-```bash
-node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
-```
-
-Check it came up:
-
-```bash
+npm run seed:dev              # user + device + open episode + evidence
 curl localhost:3000/api/health
 ```
+
+Contributing to the backend itself: read [CLAUDE.md](CLAUDE.md).
 
 ## Scripts
 
@@ -30,12 +39,16 @@ curl localhost:3000/api/health
 | `npm run dev` | Watch mode via nodemon + ts-node |
 | `npm run build` | Compile `src/` to `dist/` |
 | `npm start` | Run the compiled server |
-| `npm test` | Jest against a real in-memory MongoDB |
+| `npm test` / `test:coverage` | Jest against a real in-memory MongoDB (coverage has a ratchet) |
 | `npm run typecheck` | Type-check `src/` **and** `tests/`, no emit |
 | `npm run lint` / `lint:fix` | ESLint |
 | `npm run format` / `format:check` | Prettier |
+| `npm run openapi` / `client:ts` | Regenerate the OpenAPI spec / typed TS client |
+| `npm run seed:dev` | Seed a dev database (user, device, episode, evidence) |
 
 ## Documentation
+
+Indexed in **[docs/README.md](docs/README.md)**. Highlights:
 
 - [docs/architecture.md](docs/architecture.md) — layering, conventions, how a request flows
 - [docs/auth-api.md](docs/auth-api.md)
