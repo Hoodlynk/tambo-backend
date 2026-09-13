@@ -129,6 +129,34 @@ export const createChallenge = async (
 };
 
 /**
+ * A signed-in account whose mailbox was never proven asks for a verification
+ * code. Only legacy accounts can be in this state - OTP-gated registration
+ * (2026-09-09) means new sessions exist only after the signup code - but a
+ * signed-in legacy user needs a path that does not force a re-login. Reuses
+ * the signup purpose: verifying it heals emailVerifiedAt, binds pending buddy
+ * invites, and issues a fresh session, exactly like completing a signup.
+ */
+export const requestEmailVerification = async (
+  userId: string,
+  userAgent?: string,
+): Promise<ChallengeSummary> => {
+  const user = await User.findById(userId);
+  if (!user || !user.email) {
+    throw AppError.badRequest(
+      'This account has no email address to verify.',
+      'no_email',
+    );
+  }
+  if (user.emailVerifiedAt) {
+    throw AppError.conflict(
+      'This email address is already verified.',
+      'email_already_verified',
+    );
+  }
+  return createChallenge(user, 'signup', { userAgent });
+};
+
+/**
  * Re-issues the code for a live challenge, cooldown-limited. The code is
  * rotated (never resent verbatim), and rotating resets neither expiry nor the
  * attempt budget - resending must not extend an attacker's window.

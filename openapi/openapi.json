@@ -1,0 +1,5122 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Tambo API",
+    "version": "1.0.0",
+    "description": "Anti-theft backend: auth (email OTP), devices, evidence ingest, theft episodes, location trail, buddies, legal acceptance, and the signed evidence pack.\n\n**Error contract**: every non-2xx response is `{ code, message }` (schema `Error`). Branch on `code`, never on `message` - messages are wording and will change; codes are contract.\n\n**Legacy alias**: every `/api/v1/auth/*` path is also served at `/api/auth/*` for pre-OpenAPI mobile builds; new clients use the versioned paths."
+  },
+  "servers": [
+    {
+      "url": "https://api.tambo-app.com"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health"
+    },
+    {
+      "name": "Auth"
+    },
+    {
+      "name": "Devices"
+    },
+    {
+      "name": "Episodes"
+    },
+    {
+      "name": "Evidence",
+      "description": "Device-token auth (X-Device-Token), not user auth."
+    },
+    {
+      "name": "Buddies"
+    },
+    {
+      "name": "Familiar locations"
+    },
+    {
+      "name": "Legal"
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Liveness + readiness",
+        "responses": {
+          "200": {
+            "description": "Healthy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok",
+                        "degraded"
+                      ]
+                    },
+                    "database": {
+                      "type": "string"
+                    },
+                    "uptime": {
+                      "type": "number"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "description": "ISO-8601 timestamp"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "database",
+                    "uptime",
+                    "timestamp"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database unusable; stop routing traffic here.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok",
+                        "degraded"
+                      ]
+                    },
+                    "database": {
+                      "type": "string"
+                    },
+                    "uptime": {
+                      "type": "number"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "description": "ISO-8601 timestamp"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "database",
+                    "uptime",
+                    "timestamp"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Start a signup (always answers with an OTP challenge)",
+        "description": "No session exists until the emailed 6-digit code is verified at /auth/otp/verify. The mailbox must be proven.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "email": {
+                    "description": "Normalized to lowercase; uniqueness is case-insensitive.",
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8
+                  }
+                },
+                "required": [
+                  "name",
+                  "email",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Code emailed; verify it to get the first session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "challenge": {
+                      "type": "object",
+                      "properties": {
+                        "challengeId": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "purpose": {
+                          "type": "string",
+                          "enum": [
+                            "signup",
+                            "login",
+                            "password_change",
+                            "email_change"
+                          ]
+                        },
+                        "expiresInMinutes": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "challengeId",
+                        "purpose",
+                        "expiresInMinutes"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "challenge"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`email_taken`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Password login",
+        "description": "BRANCH ON THE BODY SHAPE: `tokens` present means a session was issued; `challenge` present means the mailbox was never proven - collect the emailed code and verify it to complete the login.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "description": "Normalized to lowercase; uniqueness is case-insensitive.",
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "email",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Either { user, tokens } (verified account) or { challenge } (unproven mailbox; complete via /auth/otp/verify).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "user": {
+                          "type": "object",
+                          "properties": {
+                            "_id": {
+                              "type": "string",
+                              "pattern": "^[a-f\\d]{24}$"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "type": "string"
+                            },
+                            "phone": {
+                              "type": "string"
+                            },
+                            "role": {
+                              "type": "string",
+                              "enum": [
+                                "user",
+                                "admin"
+                              ]
+                            },
+                            "emailVerifiedAt": {
+                              "type": "string",
+                              "description": "ISO-8601 timestamp"
+                            },
+                            "phoneVerifiedAt": {
+                              "type": "string",
+                              "description": "ISO-8601 timestamp"
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "description": "ISO-8601 timestamp"
+                            },
+                            "updatedAt": {
+                              "type": "string",
+                              "description": "ISO-8601 timestamp"
+                            }
+                          },
+                          "required": [
+                            "_id",
+                            "name",
+                            "role",
+                            "createdAt",
+                            "updatedAt"
+                          ],
+                          "additionalProperties": {}
+                        },
+                        "tokens": {
+                          "type": "object",
+                          "properties": {
+                            "accessToken": {
+                              "type": "string",
+                              "description": "JWT; send as \"Authorization: Bearer <token>\"."
+                            },
+                            "refreshToken": {
+                              "type": "string",
+                              "description": "Opaque, single-use; rotated on every /auth/refresh."
+                            },
+                            "expiresIn": {
+                              "type": "string",
+                              "description": "Access-token TTL as a duration string, e.g. \"15m\"."
+                            }
+                          },
+                          "required": [
+                            "accessToken",
+                            "refreshToken",
+                            "expiresIn"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "user",
+                        "tokens"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "challenge": {
+                          "type": "object",
+                          "properties": {
+                            "challengeId": {
+                              "type": "string",
+                              "pattern": "^[a-f\\d]{24}$"
+                            },
+                            "purpose": {
+                              "type": "string",
+                              "enum": [
+                                "signup",
+                                "login",
+                                "password_change",
+                                "email_change"
+                              ]
+                            },
+                            "expiresInMinutes": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "challengeId",
+                            "purpose",
+                            "expiresInMinutes"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "challenge"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_credentials` — Same code for wrong password AND unknown email, by design. · `no_password_credential`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/otp/verify": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Complete any pending challenge with the emailed code",
+        "description": "Every purpose ends in a fresh session (token pair).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "challengeId": {
+                    "type": "string",
+                    "pattern": "^[a-f\\d]{24}$"
+                  },
+                  "code": {
+                    "type": "string",
+                    "pattern": "^\\d{6}$"
+                  }
+                },
+                "required": [
+                  "challengeId",
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verified.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "phone": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "admin"
+                          ]
+                        },
+                        "emailVerifiedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "phoneVerifiedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "name",
+                        "role",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "tokens": {
+                      "type": "object",
+                      "properties": {
+                        "accessToken": {
+                          "type": "string",
+                          "description": "JWT; send as \"Authorization: Bearer <token>\"."
+                        },
+                        "refreshToken": {
+                          "type": "string",
+                          "description": "Opaque, single-use; rotated on every /auth/refresh."
+                        },
+                        "expiresIn": {
+                          "type": "string",
+                          "description": "Access-token TTL as a duration string, e.g. \"15m\"."
+                        }
+                      },
+                      "required": [
+                        "accessToken",
+                        "refreshToken",
+                        "expiresIn"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "user",
+                    "tokens"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_otp` — Wrong code, tries remain. · `otp_attempts_exceeded` — Budget burned; restart the flow. · `invalid_challenge` — Expired/consumed/unknown; restart the flow.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`email_taken` — email_change only: address claimed while the code was in flight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/otp/resend": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Re-send the code for a live challenge (rotated, cooldown-limited)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "challengeId": {
+                    "type": "string",
+                    "pattern": "^[a-f\\d]{24}$"
+                  }
+                },
+                "required": [
+                  "challengeId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "A fresh code was emailed."
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_challenge`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/verify-email": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Signed-in legacy account asks for a verification code",
+        "description": "Only pre-OTP accounts can be signed in with an unproven mailbox. Opens a signup-purpose challenge; verifying it heals emailVerifiedAt.",
+        "responses": {
+          "200": {
+            "description": "Code emailed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "challenge": {
+                      "type": "object",
+                      "properties": {
+                        "challengeId": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "purpose": {
+                          "type": "string",
+                          "enum": [
+                            "signup",
+                            "login",
+                            "password_change",
+                            "email_change"
+                          ]
+                        },
+                        "expiresInMinutes": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "challengeId",
+                        "purpose",
+                        "expiresInMinutes"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "challenge"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`no_email`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`email_already_verified`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Rotate the refresh token for a new pair",
+        "description": "Single-use: the presented token is revoked and a successor issued. A token presented twice burns its whole family (leak response).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refreshToken": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "refreshToken"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rotated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "phone": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "admin"
+                          ]
+                        },
+                        "emailVerifiedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "phoneVerifiedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "name",
+                        "role",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "tokens": {
+                      "type": "object",
+                      "properties": {
+                        "accessToken": {
+                          "type": "string",
+                          "description": "JWT; send as \"Authorization: Bearer <token>\"."
+                        },
+                        "refreshToken": {
+                          "type": "string",
+                          "description": "Opaque, single-use; rotated on every /auth/refresh."
+                        },
+                        "expiresIn": {
+                          "type": "string",
+                          "description": "Access-token TTL as a duration string, e.g. \"15m\"."
+                        }
+                      },
+                      "required": [
+                        "accessToken",
+                        "refreshToken",
+                        "expiresIn"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "user",
+                    "tokens"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_refresh_token` · `refresh_token_reused` — This token was already rotated - treated as a leak; the whole session family is revoked. Sign in again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Revoke the session the refresh token belongs to (idempotent)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "refreshToken": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "refreshToken"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Revoked (or already gone)."
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/logout-all": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Revoke every session for this account",
+        "responses": {
+          "204": {
+            "description": "All sessions revoked."
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "The signed-in account",
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "phone": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "admin"
+                          ]
+                        },
+                        "emailVerifiedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "phoneVerifiedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "name",
+                        "role",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "user"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/sessions": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Active sessions (devices) for this account",
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-f\\d]{24}$"
+                          },
+                          "userAgent": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "description": "ISO-8601 timestamp"
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "description": "ISO-8601 timestamp"
+                          },
+                          "current": {
+                            "type": "boolean",
+                            "description": "True for the session making this request."
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "userAgent",
+                          "createdAt",
+                          "expiresAt",
+                          "current"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "sessions"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/sessions/{id}": {
+      "delete": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Revoke one session (sign that device out)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Revoked."
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`session_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/change-password": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Start a password change (completed by OTP)",
+        "description": "Nothing changes until the emailed code is verified.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "currentPassword": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "minLength": 8
+                  }
+                },
+                "required": [
+                  "currentPassword",
+                  "newPassword"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Code emailed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "challenge": {
+                      "type": "object",
+                      "properties": {
+                        "challengeId": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "purpose": {
+                          "type": "string",
+                          "enum": [
+                            "signup",
+                            "login",
+                            "password_change",
+                            "email_change"
+                          ]
+                        },
+                        "expiresInMinutes": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "challengeId",
+                        "purpose",
+                        "expiresInMinutes"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "challenge"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent). · `invalid_credentials` — Current password wrong.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/change-email": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Start an email change (code goes to the NEW address)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "newEmail": {
+                    "description": "Normalized to lowercase; uniqueness is case-insensitive.",
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "newEmail",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Code emailed to the new address.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "challenge": {
+                      "type": "object",
+                      "properties": {
+                        "challengeId": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "purpose": {
+                          "type": "string",
+                          "enum": [
+                            "signup",
+                            "login",
+                            "password_change",
+                            "email_change"
+                          ]
+                        },
+                        "expiresInMinutes": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "challengeId",
+                        "purpose",
+                        "expiresInMinutes"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "challenge"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[]. · `email_unchanged`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent). · `invalid_credentials`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`email_taken`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/forgot-password": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Request a password-reset link",
+        "description": "Always 204 - whether or not the account exists - so the endpoint cannot be used to probe for registered emails.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "description": "Normalized to lowercase; uniqueness is case-insensitive.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "If the account exists, a link was emailed."
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/reset-password": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Set a new password with an emailed reset token",
+        "description": "Single-use token. Success revokes every session and reset link.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8
+                  }
+                },
+                "required": [
+                  "token",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password set; fresh session issued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "phone": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "admin"
+                          ]
+                        },
+                        "emailVerifiedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "phoneVerifiedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "name",
+                        "role",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "tokens": {
+                      "type": "object",
+                      "properties": {
+                        "accessToken": {
+                          "type": "string",
+                          "description": "JWT; send as \"Authorization: Bearer <token>\"."
+                        },
+                        "refreshToken": {
+                          "type": "string",
+                          "description": "Opaque, single-use; rotated on every /auth/refresh."
+                        },
+                        "expiresIn": {
+                          "type": "string",
+                          "description": "Access-token TTL as a duration string, e.g. \"15m\"."
+                        }
+                      },
+                      "required": [
+                        "accessToken",
+                        "refreshToken",
+                        "expiresIn"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "user",
+                    "tokens"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_reset_token` — Used/expired/unknown.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/devices": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Enrol a device (returns its one-shot ingest token)",
+        "description": "Gated on current T&C + privacy acceptance. The ingestToken appears in this response and never again - only its hash is stored.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "imeis": {
+                    "minItems": 1,
+                    "maxItems": 2,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^\\d{14,16}$"
+                    }
+                  },
+                  "make": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "deviceModel": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "colour": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "purchaseInfo": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "failedUnlockThreshold": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  }
+                },
+                "required": [
+                  "name",
+                  "imeis",
+                  "make",
+                  "deviceModel"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Enrolled.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "device": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "user": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "imeis": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "make": {
+                          "type": "string"
+                        },
+                        "deviceModel": {
+                          "type": "string"
+                        },
+                        "colour": {
+                          "type": "string"
+                        },
+                        "purchaseInfo": {
+                          "type": "string"
+                        },
+                        "failedUnlockThreshold": {
+                          "type": "number"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "stolen"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "user",
+                        "name",
+                        "imeis",
+                        "make",
+                        "deviceModel",
+                        "failedUnlockThreshold",
+                        "status",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "ingestToken": {
+                      "type": "string",
+                      "description": "Shown ONCE; only its hash is stored. Send as X-Device-Token."
+                    }
+                  },
+                  "required": [
+                    "device",
+                    "ingestToken"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`legal_acceptance_required` — Accept the current terms + privacy first (see /api/v1/legal).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "List enrolled devices",
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "devices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "_id": {
+                            "type": "string",
+                            "pattern": "^[a-f\\d]{24}$"
+                          },
+                          "user": {
+                            "type": "string",
+                            "pattern": "^[a-f\\d]{24}$"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "imeis": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "make": {
+                            "type": "string"
+                          },
+                          "deviceModel": {
+                            "type": "string"
+                          },
+                          "colour": {
+                            "type": "string"
+                          },
+                          "purchaseInfo": {
+                            "type": "string"
+                          },
+                          "failedUnlockThreshold": {
+                            "type": "number"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "stolen"
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "description": "ISO-8601 timestamp"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "description": "ISO-8601 timestamp"
+                          }
+                        },
+                        "required": [
+                          "_id",
+                          "user",
+                          "name",
+                          "imeis",
+                          "make",
+                          "deviceModel",
+                          "failedUnlockThreshold",
+                          "status",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    }
+                  },
+                  "required": [
+                    "devices"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/devices/{id}": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "One device",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "device": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "user": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "imeis": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "make": {
+                          "type": "string"
+                        },
+                        "deviceModel": {
+                          "type": "string"
+                        },
+                        "colour": {
+                          "type": "string"
+                        },
+                        "purchaseInfo": {
+                          "type": "string"
+                        },
+                        "failedUnlockThreshold": {
+                          "type": "number"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "stolen"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "user",
+                        "name",
+                        "imeis",
+                        "make",
+                        "deviceModel",
+                        "failedUnlockThreshold",
+                        "status",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "device"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`device_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Update device details",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "imeis": {
+                    "minItems": 1,
+                    "maxItems": 2,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^\\d{14,16}$"
+                    }
+                  },
+                  "make": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "deviceModel": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "colour": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "purchaseInfo": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "failedUnlockThreshold": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "device": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "user": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "imeis": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "make": {
+                          "type": "string"
+                        },
+                        "deviceModel": {
+                          "type": "string"
+                        },
+                        "colour": {
+                          "type": "string"
+                        },
+                        "purchaseInfo": {
+                          "type": "string"
+                        },
+                        "failedUnlockThreshold": {
+                          "type": "number"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "stolen"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "user",
+                        "name",
+                        "imeis",
+                        "make",
+                        "deviceModel",
+                        "failedUnlockThreshold",
+                        "status",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "device"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`device_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Remove a device",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed."
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`device_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/devices/{id}/activity": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Failed-unlock report (\"has anyone been trying my PIN?\")",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "activity": {
+                      "type": "object",
+                      "properties": {
+                        "inWindow": {
+                          "type": "number",
+                          "description": "Failed unlocks inside the counting window."
+                        },
+                        "toThreshold": {
+                          "type": "number",
+                          "description": "Attempts left before auto-open; 0 = would open."
+                        },
+                        "threshold": {
+                          "type": "number"
+                        },
+                        "windowMinutes": {
+                          "type": "number"
+                        },
+                        "lastAttemptAt": {
+                          "nullable": true,
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "recent": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "capturedAt": {
+                                "type": "string",
+                                "description": "Device clock; recorded, never trusted."
+                              },
+                              "receivedAt": {
+                                "type": "string",
+                                "description": "Server clock; the authoritative timeline."
+                              },
+                              "location": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "lat": {
+                                    "type": "number"
+                                  },
+                                  "lng": {
+                                    "type": "number"
+                                  },
+                                  "accuracyM": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "lat",
+                                  "lng"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "capturedAt",
+                              "receivedAt",
+                              "location"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "inWindow",
+                        "toThreshold",
+                        "threshold",
+                        "windowMinutes",
+                        "lastAttemptAt",
+                        "recent"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "activity"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`device_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/devices/{id}/token": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Rotate the ingest token (old one stops working)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "New token; shown once.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ingestToken": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ingestToken"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`device_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Revoke the ingest token",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Revoked."
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`device_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/devices/{id}/mark-stolen": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Owner marks the device stolen (opens/converges on an episode)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Converged on the already-open episode.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "episode": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "user": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "device": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "open",
+                            "resolved"
+                          ]
+                        },
+                        "openedBy": {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "device"
+                          ]
+                        },
+                        "openedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "resolvedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "resolution": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "user",
+                        "device",
+                        "status",
+                        "openedBy",
+                        "openedAt"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "episode"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "This call opened the episode.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "episode": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "user": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "device": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "open",
+                            "resolved"
+                          ]
+                        },
+                        "openedBy": {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "device"
+                          ]
+                        },
+                        "openedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "resolvedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "resolution": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "user",
+                        "device",
+                        "status",
+                        "openedBy",
+                        "openedAt"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "episode"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`device_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/devices/{id}/mark-recovered": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Owner marks the device back in hand (resolves the episode)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resolved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "episode": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "user": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "device": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "open",
+                            "resolved"
+                          ]
+                        },
+                        "openedBy": {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "device"
+                          ]
+                        },
+                        "openedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "resolvedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "resolution": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "user",
+                        "device",
+                        "status",
+                        "openedBy",
+                        "openedAt"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "episode"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`device_not_found` · `episode_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/episodes": {
+      "get": {
+        "tags": [
+          "Episodes"
+        ],
+        "summary": "List theft episodes (optionally per device)",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "episodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "_id": {
+                            "type": "string",
+                            "pattern": "^[a-f\\d]{24}$"
+                          },
+                          "user": {
+                            "type": "string",
+                            "pattern": "^[a-f\\d]{24}$"
+                          },
+                          "device": {
+                            "type": "string",
+                            "pattern": "^[a-f\\d]{24}$"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "open",
+                              "resolved"
+                            ]
+                          },
+                          "openedBy": {
+                            "type": "string",
+                            "enum": [
+                              "owner",
+                              "device"
+                            ]
+                          },
+                          "openedAt": {
+                            "type": "string",
+                            "description": "ISO-8601 timestamp"
+                          },
+                          "resolvedAt": {
+                            "type": "string",
+                            "description": "ISO-8601 timestamp"
+                          },
+                          "resolution": {
+                            "type": "string"
+                          },
+                          "note": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "_id",
+                          "user",
+                          "device",
+                          "status",
+                          "openedBy",
+                          "openedAt"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    }
+                  },
+                  "required": [
+                    "episodes"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/episodes/{id}": {
+      "get": {
+        "tags": [
+          "Episodes"
+        ],
+        "summary": "One episode",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "episode": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "user": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "device": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "open",
+                            "resolved"
+                          ]
+                        },
+                        "openedBy": {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "device"
+                          ]
+                        },
+                        "openedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "resolvedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "resolution": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "user",
+                        "device",
+                        "status",
+                        "openedBy",
+                        "openedAt"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "episode"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`episode_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/episodes/{id}/trail": {
+      "get": {
+        "tags": [
+          "Episodes"
+        ],
+        "summary": "The location trail: ordered fixes, static vs moving, familiar context",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "trail": {
+                      "type": "object",
+                      "properties": {
+                        "movement": {
+                          "type": "string",
+                          "enum": [
+                            "static",
+                            "moving",
+                            "unknown"
+                          ],
+                          "description": "unknown = fewer than 2 usable fixes."
+                        },
+                        "points": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "at": {
+                                "type": "string",
+                                "description": "ISO-8601 timestamp"
+                              },
+                              "source": {
+                                "type": "string",
+                                "enum": [
+                                  "UNLOCK_FAILED",
+                                  "TRAIL_POINT"
+                                ]
+                              },
+                              "lat": {
+                                "type": "number"
+                              },
+                              "lng": {
+                                "type": "number"
+                              },
+                              "accuracyM": {
+                                "type": "number"
+                              },
+                              "familiar": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "distanceM": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "label",
+                                  "distanceM"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "at",
+                              "source",
+                              "lat",
+                              "lng",
+                              "familiar"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "leftFamiliar": {
+                          "nullable": true,
+                          "description": "Set only when a MOVING trail left a familiar place.",
+                          "type": "object",
+                          "properties": {
+                            "label": {
+                              "type": "string"
+                            },
+                            "at": {
+                              "type": "string",
+                              "description": "ISO-8601 timestamp"
+                            }
+                          },
+                          "required": [
+                            "label",
+                            "at"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "movement",
+                        "points",
+                        "leftFamiliar"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "trail"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`episode_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/episodes/{id}/pack": {
+      "get": {
+        "tags": [
+          "Episodes"
+        ],
+        "summary": "The evidence pack (JSON, Ed25519-signed manifest)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pack": {
+                      "type": "object",
+                      "properties": {
+                        "version": {
+                          "type": "number",
+                          "enum": [
+                            1
+                          ]
+                        },
+                        "generatedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "episode": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "pattern": "^[a-f\\d]{24}$"
+                            },
+                            "status": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "status"
+                          ],
+                          "additionalProperties": {}
+                        },
+                        "owner": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "name"
+                          ],
+                          "additionalProperties": {}
+                        },
+                        "device": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "imeis": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "imeis"
+                          ],
+                          "additionalProperties": {}
+                        },
+                        "unlockAttempts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": {}
+                          }
+                        },
+                        "trail": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": {}
+                          }
+                        },
+                        "trailSummary": {
+                          "type": "object",
+                          "properties": {
+                            "movement": {
+                              "type": "string",
+                              "enum": [
+                                "static",
+                                "moving",
+                                "unknown"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "movement"
+                          ],
+                          "additionalProperties": {}
+                        },
+                        "photos": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": {}
+                          }
+                        },
+                        "actionChecklist": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "integrity": {
+                          "type": "object",
+                          "properties": {
+                            "algorithm": {
+                              "type": "string",
+                              "enum": [
+                                "Ed25519"
+                              ]
+                            },
+                            "publicKeyBase64": {
+                              "type": "string"
+                            },
+                            "signatureBase64": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "algorithm",
+                            "publicKeyBase64",
+                            "signatureBase64"
+                          ],
+                          "additionalProperties": {}
+                        }
+                      },
+                      "required": [
+                        "version",
+                        "generatedAt",
+                        "episode",
+                        "owner",
+                        "device",
+                        "unlockAttempts",
+                        "trail",
+                        "trailSummary",
+                        "photos",
+                        "actionChecklist",
+                        "integrity"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "pack"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`episode_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/episodes/{id}/pack.pdf": {
+      "get": {
+        "tags": [
+          "Episodes"
+        ],
+        "summary": "The evidence pack as a PDF (photos embedded)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The PDF bytes.",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`episode_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/episodes/{id}/send-pack": {
+      "post": {
+        "tags": [
+          "Episodes"
+        ],
+        "summary": "Email the pack (PDF attached) to the owner and accepted buddies",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dispatched.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recipients": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Email addresses the pack went to."
+                    }
+                  },
+                  "required": [
+                    "recipients"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`episode_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/evidence": {
+      "post": {
+        "tags": [
+          "Evidence"
+        ],
+        "summary": "Ingest a batch of evidence envelopes (idempotent per envelope id)",
+        "description": "Authenticates as a DEVICE via X-Device-Token. 200 even with per-envelope rejections: read the ACK list; retry only failures. An ingest response carrying episodeId/episodeOpened is the cue to start the location-trail fan-out.",
+        "parameters": [
+          {
+            "name": "X-Device-Token",
+            "in": "header",
+            "required": true,
+            "description": "The one-shot ingest token issued at device registration.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "envelopes": {
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[\\w-]{8,64}$"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "UNLOCK_FAILED",
+                            "TRAIL_POINT",
+                            "DEVICE_SNAPSHOT",
+                            "STATUS",
+                            "PHOTO"
+                          ]
+                        },
+                        "capturedAt": {
+                          "type": "string"
+                        },
+                        "payload": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 8000
+                        },
+                        "sha256": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{64}$"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type",
+                        "capturedAt",
+                        "payload",
+                        "sha256"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "envelopes"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Per-envelope ACKs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "description": "The client-generated envelope id."
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "acked",
+                              "duplicate",
+                              "rejected"
+                            ]
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "status"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "episodeId": {
+                      "description": "Present when the device has an open episode after this batch.",
+                      "type": "string",
+                      "pattern": "^[a-f\\d]{24}$"
+                    },
+                    "episodeOpened": {
+                      "description": "True when THIS batch crossed the threshold. Start the trail.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "results"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_device_token` — Revoked or unknown X-Device-Token (code \"missing_device_token\" when absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "deviceToken": []
+          }
+        ]
+      }
+    },
+    "/api/v1/evidence/{envelopeId}/media": {
+      "post": {
+        "tags": [
+          "Evidence"
+        ],
+        "summary": "Attach photo bytes to a PHOTO envelope (hash-verified, idempotent)",
+        "parameters": [
+          {
+            "name": "envelopeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{8,64}$"
+            }
+          },
+          {
+            "name": "X-Device-Token",
+            "in": "header",
+            "required": true,
+            "description": "The one-shot ingest token issued at device registration.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Content-Sha256",
+            "in": "header",
+            "required": true,
+            "description": "Hex SHA-256 of the request body; verified server-side.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "The raw media bytes, exactly as hashed.",
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Identical content already stored.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "envelopeId": {
+                      "type": "string"
+                    },
+                    "bytes": {
+                      "type": "number"
+                    },
+                    "stored": {
+                      "type": "boolean",
+                      "description": "False = this exact content was already stored."
+                    }
+                  },
+                  "required": [
+                    "envelopeId",
+                    "bytes",
+                    "stored"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Stored.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "envelopeId": {
+                      "type": "string"
+                    },
+                    "bytes": {
+                      "type": "number"
+                    },
+                    "stored": {
+                      "type": "boolean",
+                      "description": "False = this exact content was already stored."
+                    }
+                  },
+                  "required": [
+                    "envelopeId",
+                    "bytes",
+                    "stored"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`missing_content_hash` · `empty_media` · `hash_mismatch` — Body bytes do not hash to X-Content-Sha256. · `not_photo_envelope`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_device_token` — Revoked or unknown X-Device-Token (code \"missing_device_token\" when absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`envelope_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`media_conflict` — Envelope already has DIFFERENT media attached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`payload_too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "deviceToken": []
+          }
+        ]
+      }
+    },
+    "/api/v1/buddies": {
+      "post": {
+        "tags": [
+          "Buddies"
+        ],
+        "summary": "Nominate a buddy by email",
+        "description": "Always yields \"pending\" - the response never reveals whether the address belongs to a Tambo account. The buddy accepts IN-APP; if the email is not registered yet, the link auto-binds when they sign up.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Invited.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "buddy": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "active",
+                            "declined",
+                            "revoked"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "email",
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "buddy"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[]. · `buddy_is_self` · `buddy_limit_reached`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`buddy_exists`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Buddies"
+        ],
+        "summary": "List nominated buddies (owner view)",
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "buddies": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-f\\d]{24}$"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "active",
+                              "declined",
+                              "revoked"
+                            ]
+                          },
+                          "invitedAt": {
+                            "type": "string",
+                            "description": "ISO-8601 timestamp"
+                          },
+                          "respondedAt": {
+                            "type": "string",
+                            "description": "ISO-8601 timestamp"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "email",
+                          "name",
+                          "status",
+                          "invitedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "buddies"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/buddies/{id}": {
+      "delete": {
+        "tags": [
+          "Buddies"
+        ],
+        "summary": "Remove a buddy (they stop receiving alerts)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed."
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`buddy_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/buddy-invites": {
+      "get": {
+        "tags": [
+          "Buddies"
+        ],
+        "summary": "Invitations addressed to me (buddy view)",
+        "responses": {
+          "200": {
+            "description": "Pending invitations.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invites": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-f\\d]{24}$"
+                          },
+                          "from": {
+                            "nullable": true,
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "active",
+                              "declined",
+                              "revoked"
+                            ]
+                          },
+                          "invitedAt": {
+                            "type": "string",
+                            "description": "ISO-8601 timestamp"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "from",
+                          "status",
+                          "invitedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "invites"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/buddy-invites/{id}/{action}": {
+      "post": {
+        "tags": [
+          "Buddies"
+        ],
+        "summary": "Accept or decline an invitation (action: accept | decline)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "accept",
+                "decline"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recorded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invite": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "status": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "invite"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`invite_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/familiar-locations": {
+      "get": {
+        "tags": [
+          "Familiar locations"
+        ],
+        "summary": "List registered familiar places",
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "locations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "_id": {
+                            "type": "string",
+                            "pattern": "^[a-f\\d]{24}$"
+                          },
+                          "user": {
+                            "type": "string",
+                            "pattern": "^[a-f\\d]{24}$"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "lat": {
+                            "type": "number"
+                          },
+                          "lng": {
+                            "type": "number"
+                          },
+                          "radiusM": {
+                            "type": "number"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "description": "ISO-8601 timestamp"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "description": "ISO-8601 timestamp"
+                          }
+                        },
+                        "required": [
+                          "_id",
+                          "user",
+                          "label",
+                          "lat",
+                          "lng",
+                          "radiusM",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    }
+                  },
+                  "required": [
+                    "locations"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Familiar locations"
+        ],
+        "summary": "Register a familiar place (max 10; interpretation only)",
+        "description": "Familiarity NEVER relaxes thresholds, episodes, or alerts - it only annotates trails and reports (\"left familiar location home at ...\").",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "lat": {
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90
+                  },
+                  "lng": {
+                    "type": "number",
+                    "minimum": -180,
+                    "maximum": 180
+                  },
+                  "radiusM": {
+                    "type": "integer",
+                    "minimum": 50,
+                    "maximum": 2000
+                  }
+                },
+                "required": [
+                  "label",
+                  "lat",
+                  "lng"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "user": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "lat": {
+                          "type": "number"
+                        },
+                        "lng": {
+                          "type": "number"
+                        },
+                        "radiusM": {
+                          "type": "number"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "user",
+                        "label",
+                        "lat",
+                        "lng",
+                        "radiusM",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "location"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`familiar_location_exists` · `familiar_location_limit`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/familiar-locations/{id}": {
+      "patch": {
+        "tags": [
+          "Familiar locations"
+        ],
+        "summary": "Update a familiar place",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "lat": {
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90
+                  },
+                  "lng": {
+                    "type": "number",
+                    "minimum": -180,
+                    "maximum": 180
+                  },
+                  "radiusM": {
+                    "type": "integer",
+                    "minimum": 50,
+                    "maximum": 2000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "user": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "label": {
+                          "type": "string"
+                        },
+                        "lat": {
+                          "type": "number"
+                        },
+                        "lng": {
+                          "type": "number"
+                        },
+                        "radiusM": {
+                          "type": "number"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "user",
+                        "label",
+                        "lat",
+                        "lng",
+                        "radiusM",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "location"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`familiar_location_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`familiar_location_exists`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Familiar locations"
+        ],
+        "summary": "Delete a familiar place",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`familiar_location_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/legal": {
+      "get": {
+        "tags": [
+          "Legal"
+        ],
+        "summary": "Current T&C + privacy versions and where the content lives",
+        "description": "Public: the app shows the modal before a session exists.",
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "documents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "doc": {
+                            "type": "string",
+                            "enum": [
+                              "terms",
+                              "privacy"
+                            ]
+                          },
+                          "version": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "doc",
+                          "version",
+                          "url"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "documents"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/legal/status": {
+      "get": {
+        "tags": [
+          "Legal"
+        ],
+        "summary": "What this user accepted vs current (upToDate: false ⇒ re-prompt)",
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "documents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "doc": {
+                            "type": "string",
+                            "enum": [
+                              "terms",
+                              "privacy"
+                            ]
+                          },
+                          "version": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "acceptedVersion": {
+                            "nullable": true,
+                            "type": "string"
+                          },
+                          "acceptedAt": {
+                            "nullable": true,
+                            "type": "string",
+                            "description": "ISO-8601 timestamp"
+                          },
+                          "upToDate": {
+                            "type": "boolean",
+                            "description": "false = show the modal before letting the user continue."
+                          }
+                        },
+                        "required": [
+                          "doc",
+                          "version",
+                          "url",
+                          "acceptedVersion",
+                          "acceptedAt",
+                          "upToDate"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "documents"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/legal/accept": {
+      "post": {
+        "tags": [
+          "Legal"
+        ],
+        "summary": "Record acceptance of one document (send scrolledToEnd: true)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "doc": {
+                    "type": "string",
+                    "enum": [
+                      "terms",
+                      "privacy"
+                    ]
+                  },
+                  "version": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "scrolledToEnd": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  }
+                },
+                "required": [
+                  "doc",
+                  "version",
+                  "scrolledToEnd"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Recorded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "document": {
+                      "type": "object",
+                      "properties": {
+                        "doc": {
+                          "type": "string",
+                          "enum": [
+                            "terms",
+                            "privacy"
+                          ]
+                        },
+                        "version": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "doc",
+                        "version"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "required": [
+                    "document"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthorized` — Invalid/expired access token (code \"missing_token\" when the header is absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`stale_legal_version` — The document changed while it was on screen; reload it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Access token from login/otp-verify/refresh; expires in 15m."
+      },
+      "deviceToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Device-Token",
+        "description": "The ingest token issued at device registration."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable machine-readable code. Branch on this, never on message."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human wording; free to change."
+          },
+          "details": {
+            "description": "Per-field errors; present on validation_error only.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "field",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "retryAfter": {
+            "description": "Seconds to wait; present on rate_limited (429) only.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "additionalProperties": {},
+        "description": "The uniform error envelope."
+      }
+    }
+  }
+}

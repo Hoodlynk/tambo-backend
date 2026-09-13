@@ -118,6 +118,21 @@ revoked (the login identifier changed), fresh session returned. A last-moment
 `409 email_taken` on verify is possible (someone claimed the address while the
 code was in flight) — surface it and restart.
 
+## 5b. Verify email while signed in (legacy accounts only)
+
+```
+POST /api/auth/verify-email           (Bearer, no body)
+→ 200 { challenge }              // purpose "signup"; code emailed
+→ 409 email_already_verified     // nothing to do - refresh /me, drop the nudge
+→ 400 no_email
+```
+
+Only pre-OTP accounts can be signed in with an unproven mailbox (new signups
+verify before their first session exists), so this backs the "verify your
+email" nudge for legacy users. Verifying the code heals `emailVerifiedAt`,
+binds pending buddy invites, and returns a fresh session — treat it exactly
+like completing a signup.
+
 ## 6. Forgot / reset password (signed out) — link-based, NOT OTP
 
 ```

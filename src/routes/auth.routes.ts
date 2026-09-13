@@ -103,6 +103,14 @@ router.post(
   asyncHandler(authController.changeEmail),
 );
 
+// legacy accounts only: new signups are already verified by the signup OTP
+router.post(
+  '/verify-email',
+  requireAuth,
+  rateLimit({ name: 'verifyEmail' }),
+  asyncHandler(authController.requestEmailVerification),
+);
+
 router.post('/logout-all', requireAuth, asyncHandler(authController.logoutAll));
 
 router.get('/sessions', requireAuth, asyncHandler(authController.listSessions));

@@ -249,3 +249,59 @@ describe('POST /api/auth/change-email', () => {
     expect(verified.body.code).toBe('email_taken');
   });
 });
+
+describe('POST /api/auth/verify-email', () => {
+  /** A signed-in account whose mailbox was never proven (pre-OTP legacy). */
+  const legacyUnverifiedUser = async () => {
+    const session = await registerUser();
+    await User.updateOne(
+      { _id: session.userId },
+      { $unset: { emailVerifiedAt: 1 } },
+    );
+    noopMailer.clear();
+    return session;
+  };
+
+  it('requires auth', async () => {
+    const res = await request(testServer()).post('/api/auth/verify-email');
+    expect(res.status).toBe(401);
+  });
+
+  it('opens a signup challenge whose code heals verification', async () => {
+    const { accessToken, userId } = await legacyUnverifiedUser();
+
+    const res = await request(testServer())
+      .post('/api/auth/verify-email')
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.challenge.purpose).toBe('signup');
+
+    const verified = await verifyOtp(
+      res.body.challenge.challengeId,
+      latestOtpCode(),
+    );
+    expect(verified.status).toBe(200);
+    expect(verified.body.tokens.accessToken).toBeTruthy();
+
+    const user = await User.findById(userId);
+    expect(user?.emailVerifiedAt).toBeTruthy();
+  });
+
+  it('409s with email_already_verified when there is nothing to do', async () => {
+    const { accessToken } = await registerUser();
+    const res = await request(testServer())
+      .post('/api/auth/verify-email')
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('email_already_verified');
+  });
+
+  it('is served identically on the canonical /api/v1/auth mount', async () => {
+    const { accessToken } = await legacyUnverifiedUser();
+    const res = await request(testServer())
+      .post('/api/v1/auth/verify-email')
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.challenge.purpose).toBe('signup');
+  });
+});

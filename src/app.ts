@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import config from './config/config';
 import authRoutes from './routes/auth.routes';
 import healthRoutes from './routes/health.routes';
+import openapiRoutes from './routes/openapi.routes';
 import buddyRoutes from './routes/v1/buddy.routes';
 import buddyInviteRoutes from './routes/v1/buddyInvite.routes';
 import deviceRoutes from './routes/v1/device.routes';
@@ -66,7 +67,11 @@ app.use((req, res, next) => {
 
 // --- Routes ----------------------------------------------------------------
 app.use('/api/health', healthRoutes);
+app.use('/api/openapi.json', openapiRoutes);
 app.use('/api/auth', authRoutes);
+// canonical versioned mount; /api/auth stays as a legacy alias for the
+// pre-OpenAPI mobile builds (same router, so behaviour cannot drift)
+app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/devices', deviceRoutes);
 app.use('/api/v1/evidence', evidenceRoutes);
 app.use('/api/v1/episodes', episodeRoutes);

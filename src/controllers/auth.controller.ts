@@ -98,6 +98,20 @@ export const changeEmail = async (
   );
 };
 
+/** Signed-in legacy account with an unproven mailbox asks for a code. */
+export const requestEmailVerification = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  sendChallenge(
+    res,
+    await otpService.requestEmailVerification(
+      authContext(req).userId,
+      userAgentOf(req),
+    ),
+  );
+};
+
 // --- OTP completion ----------------------------------------------------------
 
 export const verifyOtp = async (req: Request, res: Response): Promise<void> => {

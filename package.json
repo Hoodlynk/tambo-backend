@@ -14,7 +14,9 @@
     "format:check": "prettier --check \"{src,tests,scripts}/**/*.{ts,js,json}\"",
     "lint:fix": "eslint \"{src,tests,scripts}/**/*.ts\" --fix",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
-    "mail:test": "ts-node --files scripts/mail-test.ts"
+    "mail:test": "ts-node --files scripts/mail-test.ts",
+    "openapi": "ts-node --files scripts/openapi.ts",
+    "client:ts": "openapi-typescript openapi/openapi.json -o clients/typescript/tambo-api.d.ts"
   },
   "keywords": [],
   "author": "",
@@ -31,6 +33,7 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@apidevtools/swagger-parser": "^10.1.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
     "@types/jest": "^29.5.11",
@@ -45,6 +48,7 @@
     "jest": "^29.7.0",
     "mongodb-memory-server": "^11.2.0",
     "nodemon": "^3.0.3",
+    "openapi-typescript": "^7.13.0",
     "prettier": "^3.2.4",
     "supertest": "^6.3.4",
     "ts-jest": "^29.1.2",

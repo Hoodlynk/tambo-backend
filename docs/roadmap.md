@@ -1,7 +1,11 @@
 # Build plan & status
 
 The single source of truth for where the backend is and what comes next.
-Last updated: 2026-09-09.
+Last updated: 2026-09-13.
+
+**Active program (approved 2026-09-13)**: depth-first client-readiness &
+completion plan — Phase 0 API contract (✅ below) → 1 PWA cookie auth →
+2 FCM push → 3 entitlements → 4 observability → 5 CI → 6 onboarding docs.
 
 Legend: ✅ done & tested · 🔶 partially done · ⬜ not started · 👤 needs a human action
 
@@ -199,6 +203,18 @@ only — never touches thresholds/episodes/alert decisions), pack JSON gains
 first-alert email annotates the last known location with the familiar place.
 Owner decisions taken (2026-09-09): departures enrich existing reports only
 (no additional email yet); familiar places are owner-entered only in v1.
+
+### ✅ Phase 0 — API contract & client enablement (2026-09-13)
+OpenAPI 3.0 generated from the SAME zod schemas the server validates with
+(`src/openapi/registry.ts` + `responses.ts`), served at `GET /api/openapi.json`
+and committed to `openapi/openapi.json` (`npm run openapi`); typed TS client
+via `npm run client:ts` (Swift command documented). Tests validate the document
+(swagger-parser) and probe every documented path against the live router, so
+spec↔server drift fails the suite. Plus: `POST /auth/verify-email` (legacy
+unverified accounts; 409 `email_already_verified`), canonical `/api/v1/auth`
+mount (legacy `/api/auth` alias kept), `docs/README.md` index,
+`docs/client-generation.md`, and the Android contract-fix brief
+(`docs/android-feedback-2026-09-12.md`).
 
 ### 🔶 F1 — failed-unlock detection (backend done; Android side missing)
 Backend half is live: ingest counts `UNLOCK_FAILED` envelopes, threshold
