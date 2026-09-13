@@ -193,7 +193,8 @@ const parseMailDriver = (): MailDriver => {
 
 /** Mirror of parseMailDriver: a typo'd push driver must fail at boot. */
 const parsePushDriver = (): PushDriver => {
-  const raw = process.env.PUSH_DRIVER || (rawNodeEnv === 'test' ? 'noop' : 'console');
+  const raw =
+    process.env.PUSH_DRIVER || (rawNodeEnv === 'test' ? 'noop' : 'console');
   if (!(PUSH_DRIVERS as readonly string[]).includes(raw)) {
     throw new Error(
       `PUSH_DRIVER must be one of: ${PUSH_DRIVERS.join(', ')}; got "${raw}".`,

@@ -132,8 +132,11 @@ describe('classifyMovement', () => {
 });
 
 describe('matchFamiliar', () => {
-  const place = (label: string, at: { lat: number; lng: number }, radiusM = 200) =>
-    ({ label, ...at, radiusM }) as unknown as IFamiliarLocation;
+  const place = (
+    label: string,
+    at: { lat: number; lng: number },
+    radiusM = 200,
+  ) => ({ label, ...at, radiusM }) as unknown as IFamiliarLocation;
 
   it('matches a fix inside the radius and reports the distance', () => {
     const match = matchFamiliar([place('home', CBD)], NEARBY);
@@ -207,10 +210,16 @@ describe('/api/v1/familiar-locations', () => {
   it('caps the list at 10 places', async () => {
     const { accessToken } = await registerUser();
     for (let i = 0; i < 10; i += 1) {
-      const res = await addFamiliar(accessToken, { label: `place-${i}`, ...CBD });
+      const res = await addFamiliar(accessToken, {
+        label: `place-${i}`,
+        ...CBD,
+      });
       expect(res.status).toBe(201);
     }
-    const eleventh = await addFamiliar(accessToken, { label: 'one-too-many', ...CBD });
+    const eleventh = await addFamiliar(accessToken, {
+      label: 'one-too-many',
+      ...CBD,
+    });
     expect(eleventh.status).toBe(409);
     expect(eleventh.body.code).toBe('familiar_location_limit');
   });
@@ -230,7 +239,10 @@ describe('/api/v1/familiar-locations', () => {
 
   it("cannot touch another user's place", async () => {
     const owner = await registerUser();
-    const created = await addFamiliar(owner.accessToken, { label: 'home', ...CBD });
+    const created = await addFamiliar(owner.accessToken, {
+      label: 'home',
+      ...CBD,
+    });
     const id = created.body.location._id as string;
 
     const stranger = await registerUser({ email: 'mallory@tambo.app' });
@@ -328,7 +340,11 @@ describe('GET /episodes/:id/trail', () => {
     const scene = await enrol();
     // a tight 50m radius around home; NEARBY (~44m) is inside, but with the
     // radius this small a wobble outside must still not read as "left home"
-    await addFamiliar(scene.accessToken, { label: 'home', ...CBD, radiusM: 50 });
+    await addFamiliar(scene.accessToken, {
+      label: 'home',
+      ...CBD,
+      radiusM: 50,
+    });
     const episodeId = await markStolen(scene.accessToken, scene.deviceId);
 
     await ingestOne(scene.ingestToken, envelope('TRAIL_POINT', CBD));

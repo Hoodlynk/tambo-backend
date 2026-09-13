@@ -92,7 +92,12 @@ export const errorHandler = (
   // `isDevelopment` is true only when NODE_ENV is EXPLICITLY development, so a
   // deployment that forgets to set NODE_ENV does not leak internals.
   logger.error(
-    { requestId: req.requestId, err, method: req.method, path: req.originalUrl },
+    {
+      requestId: req.requestId,
+      err,
+      method: req.method,
+      path: req.originalUrl,
+    },
     'unhandled error',
   );
   res.status(500).json({

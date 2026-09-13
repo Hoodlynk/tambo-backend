@@ -37,11 +37,13 @@ class FcmPusher implements Pusher {
   async send(message: PushMessage): Promise<PushResult> {
     if (message.tokens.length === 0) return { invalidTokens: [] };
 
-    const response = await firebase().messaging().sendEachForMulticast({
-      tokens: message.tokens,
-      notification: { title: message.title, body: message.body },
-      ...(message.data ? { data: message.data } : {}),
-    });
+    const response = await firebase()
+      .messaging()
+      .sendEachForMulticast({
+        tokens: message.tokens,
+        notification: { title: message.title, body: message.body },
+        ...(message.data ? { data: message.data } : {}),
+      });
 
     const invalidTokens: string[] = [];
     response.responses.forEach((result, index) => {

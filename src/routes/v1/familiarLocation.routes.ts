@@ -22,7 +22,10 @@ router.post(
 );
 router.patch(
   '/:id',
-  validate({ params: familiarLocationIdSchema, body: familiarLocationUpdateSchema }),
+  validate({
+    params: familiarLocationIdSchema,
+    body: familiarLocationUpdateSchema,
+  }),
   asyncHandler(familiarLocationController.update),
 );
 router.delete(

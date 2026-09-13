@@ -16,4 +16,6 @@ fs.writeFileSync(
   `${JSON.stringify(buildOpenApiDocument(), null, 2)}\n`,
 );
 
-console.log(`OpenAPI document written to ${path.relative(process.cwd(), outFile)}`);
+console.log(
+  `OpenAPI document written to ${path.relative(process.cwd(), outFile)}`,
+);

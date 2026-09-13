@@ -24,7 +24,11 @@ const TOKEN_B = 'fcm-token-bbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const upgradeToPro = (userId: string) =>
   User.updateOne({ _id: userId }, { $set: { plan: 'pro' } });
 
-const registerToken = (accessToken: string, token: string, platform = 'android') =>
+const registerToken = (
+  accessToken: string,
+  token: string,
+  platform = 'android',
+) =>
   request(testServer())
     .post('/api/v1/push-tokens')
     .set('Authorization', `Bearer ${accessToken}`)
@@ -34,7 +38,12 @@ const enrolAndSteal = async (accessToken: string) => {
   const enrolled = await request(testServer())
     .post('/api/v1/devices')
     .set('Authorization', `Bearer ${accessToken}`)
-    .send({ name: 'P', imeis: ['356938035643809'], make: 'T', deviceModel: 'S' });
+    .send({
+      name: 'P',
+      imeis: ['356938035643809'],
+      make: 'T',
+      deviceModel: 'S',
+    });
   const deviceId = enrolled.body.device._id as string;
   await request(testServer())
     .post(`/api/v1/devices/${deviceId}/mark-stolen`)
@@ -142,7 +151,9 @@ describe('first-alert push fan-out', () => {
 
     await until(() => noopPusher.sent.length >= 1);
     expect(noopPusher.sent).toHaveLength(1);
-    expect(noopPusher.sent[0]!.tokens.sort()).toEqual([TOKEN_A, TOKEN_B].sort());
+    expect(noopPusher.sent[0]!.tokens.sort()).toEqual(
+      [TOKEN_A, TOKEN_B].sort(),
+    );
     expect(noopPusher.sent[0]!.title).toContain('may be stolen');
     expect(noopPusher.sent[0]!.data?.type).toBe('first_alert');
     // lock-screen payloads carry no IMEIs
@@ -163,8 +174,9 @@ describe('first-alert push fan-out', () => {
     await registerToken(accessToken, TOKEN_A);
     const deviceId = await enrolAndSteal(accessToken);
 
-    await until(async () =>
-      (await PackDelivery.countDocuments({ kind: 'first_alert' })) >= 2,
+    await until(
+      async () =>
+        (await PackDelivery.countDocuments({ kind: 'first_alert' })) >= 2,
     );
 
     // a converging second mark-stolen must not re-alert on any channel
@@ -192,9 +204,7 @@ describe('first-alert push fan-out', () => {
       noopMailer.sent.some((mail) => mail.subject.includes('may be stolen')),
     );
     expect(noopPusher.sent).toHaveLength(0);
-    expect(
-      await PackDelivery.countDocuments({ channel: 'push' }),
-    ).toBe(0);
+    expect(await PackDelivery.countDocuments({ channel: 'push' })).toBe(0);
   });
 
   it('never pushes for a free-plan account - real-time alerts are a paid entitlement', async () => {
@@ -218,7 +228,9 @@ describe('first-alert push fan-out', () => {
 
     await enrolAndSteal(accessToken);
 
-    await until(async () => (await PushToken.exists({ token: TOKEN_B })) === null);
+    await until(
+      async () => (await PushToken.exists({ token: TOKEN_B })) === null,
+    );
     expect(await PushToken.exists({ token: TOKEN_A })).not.toBeNull();
   });
 });

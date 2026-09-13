@@ -68,7 +68,12 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
   };
   sendWebAuthResult(
     res,
-    await otpService.verifyChallenge(challengeId, code, userAgentOf(req), req.ip),
+    await otpService.verifyChallenge(
+      challengeId,
+      code,
+      userAgentOf(req),
+      req.ip,
+    ),
   );
 };
 

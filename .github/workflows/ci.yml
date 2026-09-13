@@ -1,0 +1,62 @@
+# Quality gates on every push and PR: types, lint, format, the full test
+# suite against a real in-memory MongoDB (with coverage ratchet), and proof
+# that the committed OpenAPI spec + generated client match the code.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type-check (src + tests)
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      # Linux runners use mongodb-memory-server's default binary; the
+      # MONGOMS_VERSION pin in the README is for macOS 12 dev machines only.
+      - name: Tests (with coverage ratchet)
+        run: npm run test:coverage
+
+      - name: OpenAPI spec is in sync with the code
+        run: |
+          npm run openapi
+          git diff --exit-code openapi/ \
+            || (echo '::error::openapi/openapi.json is stale - run `npm run openapi` and commit the result' && exit 1)
+
+      - name: Generated TS client is in sync
+        run: |
+          npm run client:ts
+          git diff --exit-code clients/ \
+            || (echo '::error::clients/ is stale - run `npm run client:ts` and commit the result' && exit 1)
+
+      - name: Upload typed client artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tambo-api-client-ts
+          path: clients/typescript/tambo-api.d.ts
+
+      - name: Upload coverage summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/lcov-report
+          if-no-files-found: ignore

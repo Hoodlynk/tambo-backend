@@ -5,7 +5,17 @@ Last updated: 2026-09-13.
 
 **Active program (approved 2026-09-13)**: depth-first client-readiness &
 completion plan — Phase 0 API contract (✅) → 1 PWA cookie auth (✅) →
-2 FCM push (✅) → 3 entitlements (✅) → 4 observability (✅) → 5 CI → 6 onboarding.
+2 FCM push (✅) → 3 entitlements (✅) → 4 observability (✅) → 5 CI (✅) →
+6 onboarding.
+
+### ✅ Phase 5 — CI & coverage gates (2026-09-13)
+GitHub Actions on push/PR: typecheck, lint, format:check, full jest with a
+coverage RATCHET (thresholds set from measured coverage minus a margin -
+raise when coverage rises, never lower), spec-staleness gates (regenerating
+openapi.json or the TS client must produce no diff, else the build fails
+with instructions), and the typed client uploaded as a build artifact.
+`npm run test:coverage` locally. Prettier normalized across the repo so
+format:check gates cleanly.
 
 ### ✅ Phase 4 — Observability & account protection (2026-09-13)
 pino structured logging (request-id middleware honouring sane inbound

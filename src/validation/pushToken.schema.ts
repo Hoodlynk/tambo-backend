@@ -12,4 +12,6 @@ export const pushTokenRegisterSchema = z.object({
 export const pushTokenUnregisterSchema = z.object({ token });
 
 export type PushTokenRegisterInput = z.infer<typeof pushTokenRegisterSchema>;
-export type PushTokenUnregisterInput = z.infer<typeof pushTokenUnregisterSchema>;
+export type PushTokenUnregisterInput = z.infer<
+  typeof pushTokenUnregisterSchema
+>;

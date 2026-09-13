@@ -19,7 +19,9 @@ export const errorResponse = z
   .looseObject({
     code: z
       .string()
-      .describe('Stable machine-readable code. Branch on this, never on message.'),
+      .describe(
+        'Stable machine-readable code. Branch on this, never on message.',
+      ),
     message: z.string().describe('Human wording; free to change.'),
     details: z
       .array(z.object({ field: z.string(), message: z.string() }))
@@ -47,11 +49,15 @@ export const user = z.looseObject({
 });
 
 export const tokens = z.object({
-  accessToken: z.string().describe('JWT; send as "Authorization: Bearer <token>".'),
+  accessToken: z
+    .string()
+    .describe('JWT; send as "Authorization: Bearer <token>".'),
   refreshToken: z
     .string()
     .describe('Opaque, single-use; rotated on every /auth/refresh.'),
-  expiresIn: z.string().describe('Access-token TTL as a duration string, e.g. "15m".'),
+  expiresIn: z
+    .string()
+    .describe('Access-token TTL as a duration string, e.g. "15m".'),
 });
 
 export const authResponse = z.object({ user, tokens });
@@ -83,7 +89,9 @@ export const sessionsResponse = z.object({
       userAgent: z.string().nullable(),
       createdAt: isoDate,
       expiresAt: isoDate,
-      current: z.boolean().describe('True for the session making this request.'),
+      current: z
+        .boolean()
+        .describe('True for the session making this request.'),
     }),
   ),
 });
@@ -151,14 +159,18 @@ const location = z.object({
 export const activityResponse = z.object({
   activity: z.object({
     inWindow: z.number().describe('Failed unlocks inside the counting window.'),
-    toThreshold: z.number().describe('Attempts left before auto-open; 0 = would open.'),
+    toThreshold: z
+      .number()
+      .describe('Attempts left before auto-open; 0 = would open.'),
     threshold: z.number(),
     windowMinutes: z.number(),
     lastAttemptAt: isoDate.nullable(),
     recent: z.array(
       z.object({
         capturedAt: isoDate.describe('Device clock; recorded, never trusted.'),
-        receivedAt: isoDate.describe('Server clock; the authoritative timeline.'),
+        receivedAt: isoDate.describe(
+          'Server clock; the authoritative timeline.',
+        ),
         location: location.nullable(),
       }),
     ),
@@ -259,7 +271,9 @@ export const ingestResponse = z.object({
 export const mediaAckResponse = z.object({
   envelopeId: z.string(),
   bytes: z.number(),
-  stored: z.boolean().describe('False = this exact content was already stored.'),
+  stored: z
+    .boolean()
+    .describe('False = this exact content was already stored.'),
 });
 
 // --- Buddies -----------------------------------------------------------------------
@@ -311,7 +325,9 @@ export const familiarLocation = z.looseObject({
   updatedAt: isoDate,
 });
 
-export const familiarLocationResponse = z.object({ location: familiarLocation });
+export const familiarLocationResponse = z.object({
+  location: familiarLocation,
+});
 export const familiarLocationsResponse = z.object({
   locations: z.array(familiarLocation),
 });
@@ -323,7 +339,9 @@ const planName = z.enum(['free', 'pro', 'family']);
 export const planResponse = z.object({
   plan: z.object({
     plan: planName,
-    effectivePlan: planName.describe('What is in force NOW (lapsed paid = free).'),
+    effectivePlan: planName.describe(
+      'What is in force NOW (lapsed paid = free).',
+    ),
     expiresAt: isoDate.nullable(),
     entitlements: z.object({
       maxDevices: z.number(),

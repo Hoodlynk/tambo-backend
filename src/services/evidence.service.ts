@@ -173,9 +173,9 @@ export const ingestBatch = async (
   // plan-tuned ADVISORY only ("how often should I ping?"): entitlements shape
   // the client's cadence, never whether evidence is accepted
   const cadence = openEpisode
-    ? (await User.findById(device.user).then((owner) =>
+    ? ((await User.findById(device.user).then((owner) =>
         owner ? entitlementsFor(owner).trailCadenceSeconds : null,
-      )) ?? undefined
+      )) ?? undefined)
     : undefined;
 
   return {

@@ -16,4 +16,16 @@ module.exports = {
   transform: {
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.test.json' }],
   },
+  collectCoverageFrom: ['src/**/*.ts', '!src/types/**'],
+  // A RATCHET, not an aspiration: set from measured coverage (2026-09-13:
+  // 93.1/77.6/91.2/94.2 across ALL src files) minus a small margin. Raise it
+  // when coverage rises; never lower it to make a failing build pass.
+  coverageThreshold: {
+    global: {
+      statements: 91,
+      branches: 74,
+      functions: 89,
+      lines: 92,
+    },
+  },
 };

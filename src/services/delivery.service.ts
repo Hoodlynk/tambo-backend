@@ -1,6 +1,9 @@
 import type { IDevice } from '../models/device.model';
 import PackDelivery from '../models/packDelivery.model';
-import type { DeliveryChannel, DeliveryKind } from '../models/packDelivery.model';
+import type {
+  DeliveryChannel,
+  DeliveryKind,
+} from '../models/packDelivery.model';
 import type { ITheftEpisode } from '../models/theftEpisode.model';
 import User from '../models/user.model';
 import { isDuplicateKeyError } from '../utils/mongoErrors';

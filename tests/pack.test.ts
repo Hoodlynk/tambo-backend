@@ -245,7 +245,10 @@ describe('GET /episodes/:id/pack', () => {
     });
     expect(pack.trail[0]!.mapsLink).toContain('maps.google.com');
     // the two fixes are ~1.2km apart: a moving trail
-    expect(pack.trailSummary).toEqual({ movement: 'moving', leftFamiliar: null });
+    expect(pack.trailSummary).toEqual({
+      movement: 'moving',
+      leftFamiliar: null,
+    });
     expect(pack.photos).toHaveLength(1);
     expect(pack.photos[0]!.sha256).toBe(sha256Hex(TINY_JPEG));
     expect(pack.otherEvidence).toHaveLength(1);

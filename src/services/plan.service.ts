@@ -18,10 +18,7 @@ export interface PlanView {
   entitlements: Record<string, unknown>;
 }
 
-const toView = (user: {
-  plan: UserPlan;
-  planExpiresAt?: Date;
-}): PlanView => ({
+const toView = (user: { plan: UserPlan; planExpiresAt?: Date }): PlanView => ({
   plan: user.plan,
   effectivePlan: effectivePlan(user),
   expiresAt: user.planExpiresAt?.toISOString() ?? null,

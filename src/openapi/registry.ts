@@ -25,20 +25,14 @@ import {
   episodeListQuerySchema,
   markStolenSchema,
 } from '../validation/device.schema';
-import {
-  ingestSchema,
-  mediaParamsSchema,
-} from '../validation/evidence.schema';
+import { ingestSchema, mediaParamsSchema } from '../validation/evidence.schema';
 import {
   familiarLocationIdSchema,
   familiarLocationSchema,
   familiarLocationUpdateSchema,
 } from '../validation/familiarLocation.schema';
 import { legalAcceptSchema } from '../validation/legal.schema';
-import {
-  planSetSchema,
-  planUserIdSchema,
-} from '../validation/plan.schema';
+import { planSetSchema, planUserIdSchema } from '../validation/plan.schema';
 import {
   pushTokenRegisterSchema,
   pushTokenUnregisterSchema,
@@ -192,7 +186,8 @@ export const endpoints: Endpoint[] = [
       {
         status: 401,
         code: 'invalid_credentials',
-        description: 'Same code for wrong password AND unknown email, by design.',
+        description:
+          'Same code for wrong password AND unknown email, by design.',
       },
       { status: 401, code: 'no_password_credential' },
       {
@@ -242,7 +237,11 @@ export const endpoints: Endpoint[] = [
           summary: 'Complete a challenge; the session cookie is set',
           request: { body: otpVerifySchema, headers: [csrfHeader] },
           responses: [
-            { status: 200, description: 'Verified; cookie set.', schema: r.webAuthResponse },
+            {
+              status: 200,
+              description: 'Verified; cookie set.',
+              schema: r.webAuthResponse,
+            },
           ],
           errors: [
             validationError,
@@ -258,7 +257,11 @@ export const endpoints: Endpoint[] = [
           summary: 'Rotate the session using the cookie (no body)',
           request: { headers: [csrfHeader] },
           responses: [
-            { status: 200, description: 'Rotated; new cookie set.', schema: r.webAuthResponse },
+            {
+              status: 200,
+              description: 'Rotated; new cookie set.',
+              schema: r.webAuthResponse,
+            },
           ],
           errors: [
             { status: 401, code: 'missing_refresh_cookie' },
@@ -270,7 +273,8 @@ export const endpoints: Endpoint[] = [
         },
         logout: {
           tag: 'Auth (web)',
-          summary: 'Revoke the cookie session and clear the cookie (idempotent)',
+          summary:
+            'Revoke the cookie session and clear the cookie (idempotent)',
           request: { headers: [csrfHeader] },
           responses: [{ status: 204, description: 'Cookie cleared.' }],
           errors: [{ status: 403, code: 'csrf_rejected' }],
@@ -293,10 +297,27 @@ export const endpoints: Endpoint[] = [
     ],
     errors: [
       validationError,
-      { status: 401, code: 'invalid_otp', description: 'Wrong code, tries remain.' },
-      { status: 401, code: 'otp_attempts_exceeded', description: 'Budget burned; restart the flow.' },
-      { status: 401, code: 'invalid_challenge', description: 'Expired/consumed/unknown; restart the flow.' },
-      { status: 409, code: 'email_taken', description: 'email_change only: address claimed while the code was in flight.' },
+      {
+        status: 401,
+        code: 'invalid_otp',
+        description: 'Wrong code, tries remain.',
+      },
+      {
+        status: 401,
+        code: 'otp_attempts_exceeded',
+        description: 'Budget burned; restart the flow.',
+      },
+      {
+        status: 401,
+        code: 'invalid_challenge',
+        description: 'Expired/consumed/unknown; restart the flow.',
+      },
+      {
+        status: 409,
+        code: 'email_taken',
+        description:
+          'email_change only: address claimed while the code was in flight.',
+      },
       rateLimited,
     ],
   },
@@ -304,7 +325,8 @@ export const endpoints: Endpoint[] = [
     method: 'post',
     path: '/api/v1/auth/otp/resend',
     tag: 'Auth',
-    summary: 'Re-send the code for a live challenge (rotated, cooldown-limited)',
+    summary:
+      'Re-send the code for a live challenge (rotated, cooldown-limited)',
     request: { body: otpResendSchema },
     responses: [{ status: 204, description: 'A fresh code was emailed.' }],
     errors: [
@@ -323,7 +345,11 @@ export const endpoints: Endpoint[] = [
       'a signup-purpose challenge; verifying it heals emailVerifiedAt.',
     auth: 'bearer',
     responses: [
-      { status: 200, description: 'Code emailed.', schema: r.challengeResponse },
+      {
+        status: 200,
+        description: 'Code emailed.',
+        schema: r.challengeResponse,
+      },
     ],
     errors: [
       unauthorized,
@@ -392,7 +418,9 @@ export const endpoints: Endpoint[] = [
     tag: 'Auth',
     summary: 'Active sessions (devices) for this account',
     auth: 'bearer',
-    responses: [{ status: 200, description: 'OK.', schema: r.sessionsResponse }],
+    responses: [
+      { status: 200, description: 'OK.', schema: r.sessionsResponse },
+    ],
     errors: [unauthorized],
   },
   {
@@ -431,12 +459,20 @@ export const endpoints: Endpoint[] = [
     auth: 'bearer',
     request: { body: changePasswordSchema },
     responses: [
-      { status: 200, description: 'Code emailed.', schema: r.challengeResponse },
+      {
+        status: 200,
+        description: 'Code emailed.',
+        schema: r.challengeResponse,
+      },
     ],
     errors: [
       unauthorized,
       validationError,
-      { status: 401, code: 'invalid_credentials', description: 'Current password wrong.' },
+      {
+        status: 401,
+        code: 'invalid_credentials',
+        description: 'Current password wrong.',
+      },
     ],
   },
   {
@@ -447,7 +483,11 @@ export const endpoints: Endpoint[] = [
     auth: 'bearer',
     request: { body: changeEmailSchema },
     responses: [
-      { status: 200, description: 'Code emailed to the new address.', schema: r.challengeResponse },
+      {
+        status: 200,
+        description: 'Code emailed to the new address.',
+        schema: r.challengeResponse,
+      },
     ],
     errors: [
       unauthorized,
@@ -466,7 +506,12 @@ export const endpoints: Endpoint[] = [
       'Always 204 - whether or not the account exists - so the endpoint ' +
       'cannot be used to probe for registered emails.',
     request: { body: forgotPasswordSchema },
-    responses: [{ status: 204, description: 'If the account exists, a link was emailed.' }],
+    responses: [
+      {
+        status: 204,
+        description: 'If the account exists, a link was emailed.',
+      },
+    ],
     errors: [validationError, rateLimited],
   },
   {
@@ -474,14 +519,23 @@ export const endpoints: Endpoint[] = [
     path: '/api/v1/auth/reset-password',
     tag: 'Auth',
     summary: 'Set a new password with an emailed reset token',
-    description: 'Single-use token. Success revokes every session and reset link.',
+    description:
+      'Single-use token. Success revokes every session and reset link.',
     request: { body: resetPasswordSchema },
     responses: [
-      { status: 200, description: 'Password set; fresh session issued.', schema: r.authResponse },
+      {
+        status: 200,
+        description: 'Password set; fresh session issued.',
+        schema: r.authResponse,
+      },
     ],
     errors: [
       validationError,
-      { status: 401, code: 'invalid_reset_token', description: 'Used/expired/unknown.' },
+      {
+        status: 401,
+        code: 'invalid_reset_token',
+        description: 'Used/expired/unknown.',
+      },
       rateLimited,
     ],
   },
@@ -498,7 +552,11 @@ export const endpoints: Endpoint[] = [
     auth: 'bearer',
     request: { body: deviceSchema },
     responses: [
-      { status: 201, description: 'Enrolled.', schema: r.deviceWithTokenResponse },
+      {
+        status: 201,
+        description: 'Enrolled.',
+        schema: r.deviceWithTokenResponse,
+      },
     ],
     errors: [
       unauthorized,
@@ -506,7 +564,8 @@ export const endpoints: Endpoint[] = [
       {
         status: 403,
         code: 'legal_acceptance_required',
-        description: 'Accept the current terms + privacy first (see /api/v1/legal).',
+        description:
+          'Accept the current terms + privacy first (see /api/v1/legal).',
       },
       {
         status: 409,
@@ -543,7 +602,9 @@ export const endpoints: Endpoint[] = [
     summary: 'Failed-unlock report ("has anyone been trying my PIN?")',
     auth: 'bearer',
     request: { params: deviceIdSchema },
-    responses: [{ status: 200, description: 'OK.', schema: r.activityResponse }],
+    responses: [
+      { status: 200, description: 'OK.', schema: r.activityResponse },
+    ],
     errors: [unauthorized, { status: 404, code: 'device_not_found' }],
   },
   {
@@ -553,8 +614,14 @@ export const endpoints: Endpoint[] = [
     summary: 'Update device details',
     auth: 'bearer',
     request: { params: deviceIdSchema, body: deviceUpdateSchema },
-    responses: [{ status: 200, description: 'Updated.', schema: r.deviceResponse }],
-    errors: [unauthorized, validationError, { status: 404, code: 'device_not_found' }],
+    responses: [
+      { status: 200, description: 'Updated.', schema: r.deviceResponse },
+    ],
+    errors: [
+      unauthorized,
+      validationError,
+      { status: 404, code: 'device_not_found' },
+    ],
   },
   {
     method: 'delete',
@@ -574,7 +641,11 @@ export const endpoints: Endpoint[] = [
     auth: 'bearer',
     request: { params: deviceIdSchema },
     responses: [
-      { status: 200, description: 'New token; shown once.', schema: r.ingestTokenResponse },
+      {
+        status: 200,
+        description: 'New token; shown once.',
+        schema: r.ingestTokenResponse,
+      },
     ],
     errors: [unauthorized, { status: 404, code: 'device_not_found' }],
   },
@@ -596,10 +667,22 @@ export const endpoints: Endpoint[] = [
     auth: 'bearer',
     request: { params: deviceIdSchema, body: markStolenSchema },
     responses: [
-      { status: 201, description: 'This call opened the episode.', schema: r.episodeResponse },
-      { status: 200, description: 'Converged on the already-open episode.', schema: r.episodeResponse },
+      {
+        status: 201,
+        description: 'This call opened the episode.',
+        schema: r.episodeResponse,
+      },
+      {
+        status: 200,
+        description: 'Converged on the already-open episode.',
+        schema: r.episodeResponse,
+      },
     ],
-    errors: [unauthorized, validationError, { status: 404, code: 'device_not_found' }],
+    errors: [
+      unauthorized,
+      validationError,
+      { status: 404, code: 'device_not_found' },
+    ],
   },
   {
     method: 'post',
@@ -608,7 +691,9 @@ export const endpoints: Endpoint[] = [
     summary: 'Owner marks the device back in hand (resolves the episode)',
     auth: 'bearer',
     request: { params: deviceIdSchema },
-    responses: [{ status: 200, description: 'Resolved.', schema: r.episodeResponse }],
+    responses: [
+      { status: 200, description: 'Resolved.', schema: r.episodeResponse },
+    ],
     errors: [
       unauthorized,
       { status: 404, code: 'device_not_found' },
@@ -624,7 +709,9 @@ export const endpoints: Endpoint[] = [
     summary: 'List theft episodes (optionally per device)',
     auth: 'bearer',
     request: { query: episodeListQuerySchema },
-    responses: [{ status: 200, description: 'Newest first.', schema: r.episodesResponse }],
+    responses: [
+      { status: 200, description: 'Newest first.', schema: r.episodesResponse },
+    ],
     errors: [unauthorized, validationError],
   },
   {
@@ -641,7 +728,8 @@ export const endpoints: Endpoint[] = [
     method: 'get',
     path: '/api/v1/episodes/{id}/trail',
     tag: 'Episodes',
-    summary: 'The location trail: ordered fixes, static vs moving, familiar context',
+    summary:
+      'The location trail: ordered fixes, static vs moving, familiar context',
     auth: 'bearer',
     request: { params: episodeIdSchema },
     responses: [{ status: 200, description: 'OK.', schema: r.trailResponse }],
@@ -665,7 +753,11 @@ export const endpoints: Endpoint[] = [
     auth: 'bearer',
     request: { params: episodeIdSchema },
     responses: [
-      { status: 200, description: 'The PDF bytes.', contentType: 'application/pdf' },
+      {
+        status: 200,
+        description: 'The PDF bytes.',
+        contentType: 'application/pdf',
+      },
     ],
     errors: [unauthorized, { status: 404, code: 'episode_not_found' }],
   },
@@ -676,8 +768,14 @@ export const endpoints: Endpoint[] = [
     summary: 'Email the pack (PDF attached) to the owner and accepted buddies',
     auth: 'bearer',
     request: { params: episodeIdSchema },
-    responses: [{ status: 200, description: 'Dispatched.', schema: r.packSendResponse }],
-    errors: [unauthorized, { status: 404, code: 'episode_not_found' }, rateLimited],
+    responses: [
+      { status: 200, description: 'Dispatched.', schema: r.packSendResponse },
+    ],
+    errors: [
+      unauthorized,
+      { status: 404, code: 'episode_not_found' },
+      rateLimited,
+    ],
   },
 
   // --- Evidence ingest (device-token auth, not user auth) ----------------------------------------
@@ -685,7 +783,8 @@ export const endpoints: Endpoint[] = [
     method: 'post',
     path: '/api/v1/evidence',
     tag: 'Evidence',
-    summary: 'Ingest a batch of evidence envelopes (idempotent per envelope id)',
+    summary:
+      'Ingest a batch of evidence envelopes (idempotent per envelope id)',
     description:
       'Authenticates as a DEVICE via X-Device-Token. 200 even with ' +
       'per-envelope rejections: read the ACK list; retry only failures. An ' +
@@ -696,14 +795,21 @@ export const endpoints: Endpoint[] = [
       body: ingestSchema,
       headers: [deviceTokenHeader],
     },
-    responses: [{ status: 200, description: 'Per-envelope ACKs.', schema: r.ingestResponse }],
+    responses: [
+      {
+        status: 200,
+        description: 'Per-envelope ACKs.',
+        schema: r.ingestResponse,
+      },
+    ],
     errors: [deviceUnauthorized, validationError, rateLimited],
   },
   {
     method: 'post',
     path: '/api/v1/evidence/{envelopeId}/media',
     tag: 'Evidence',
-    summary: 'Attach photo bytes to a PHOTO envelope (hash-verified, idempotent)',
+    summary:
+      'Attach photo bytes to a PHOTO envelope (hash-verified, idempotent)',
     auth: 'device',
     request: {
       params: mediaParamsSchema,
@@ -720,16 +826,28 @@ export const endpoints: Endpoint[] = [
     },
     responses: [
       { status: 201, description: 'Stored.', schema: r.mediaAckResponse },
-      { status: 200, description: 'Identical content already stored.', schema: r.mediaAckResponse },
+      {
+        status: 200,
+        description: 'Identical content already stored.',
+        schema: r.mediaAckResponse,
+      },
     ],
     errors: [
       deviceUnauthorized,
       { status: 400, code: 'missing_content_hash' },
       { status: 400, code: 'empty_media' },
-      { status: 400, code: 'hash_mismatch', description: 'Body bytes do not hash to X-Content-Sha256.' },
+      {
+        status: 400,
+        code: 'hash_mismatch',
+        description: 'Body bytes do not hash to X-Content-Sha256.',
+      },
       { status: 400, code: 'not_photo_envelope' },
       { status: 404, code: 'envelope_not_found' },
-      { status: 409, code: 'media_conflict', description: 'Envelope already has DIFFERENT media attached.' },
+      {
+        status: 409,
+        code: 'media_conflict',
+        description: 'Envelope already has DIFFERENT media attached.',
+      },
       { status: 413, code: 'payload_too_large' },
       rateLimited,
     ],
@@ -747,7 +865,9 @@ export const endpoints: Endpoint[] = [
       'email is not registered yet, the link auto-binds when they sign up.',
     auth: 'bearer',
     request: { body: buddySchema },
-    responses: [{ status: 201, description: 'Invited.', schema: r.buddyCreatedResponse }],
+    responses: [
+      { status: 201, description: 'Invited.', schema: r.buddyCreatedResponse },
+    ],
     errors: [
       unauthorized,
       validationError,
@@ -782,7 +902,13 @@ export const endpoints: Endpoint[] = [
     tag: 'Buddies',
     summary: 'Invitations addressed to me (buddy view)',
     auth: 'bearer',
-    responses: [{ status: 200, description: 'Pending invitations.', schema: r.invitesResponse }],
+    responses: [
+      {
+        status: 200,
+        description: 'Pending invitations.',
+        schema: r.invitesResponse,
+      },
+    ],
     errors: [unauthorized],
   },
   {
@@ -792,8 +918,18 @@ export const endpoints: Endpoint[] = [
     summary: 'Accept or decline an invitation (action: accept | decline)',
     auth: 'bearer',
     request: { params: inviteActionSchema },
-    responses: [{ status: 200, description: 'Recorded.', schema: r.inviteResponseResponse }],
-    errors: [unauthorized, validationError, { status: 404, code: 'invite_not_found' }],
+    responses: [
+      {
+        status: 200,
+        description: 'Recorded.',
+        schema: r.inviteResponseResponse,
+      },
+    ],
+    errors: [
+      unauthorized,
+      validationError,
+      { status: 404, code: 'invite_not_found' },
+    ],
   },
 
   // --- Familiar locations -----------------------------------------------------------------------------
@@ -803,7 +939,9 @@ export const endpoints: Endpoint[] = [
     tag: 'Familiar locations',
     summary: 'List registered familiar places',
     auth: 'bearer',
-    responses: [{ status: 200, description: 'OK.', schema: r.familiarLocationsResponse }],
+    responses: [
+      { status: 200, description: 'OK.', schema: r.familiarLocationsResponse },
+    ],
     errors: [unauthorized],
   },
   {
@@ -816,7 +954,13 @@ export const endpoints: Endpoint[] = [
       'annotates trails and reports ("left familiar location home at ...").',
     auth: 'bearer',
     request: { body: familiarLocationSchema },
-    responses: [{ status: 201, description: 'Created.', schema: r.familiarLocationResponse }],
+    responses: [
+      {
+        status: 201,
+        description: 'Created.',
+        schema: r.familiarLocationResponse,
+      },
+    ],
     errors: [
       unauthorized,
       validationError,
@@ -830,8 +974,17 @@ export const endpoints: Endpoint[] = [
     tag: 'Familiar locations',
     summary: 'Update a familiar place',
     auth: 'bearer',
-    request: { params: familiarLocationIdSchema, body: familiarLocationUpdateSchema },
-    responses: [{ status: 200, description: 'Updated.', schema: r.familiarLocationResponse }],
+    request: {
+      params: familiarLocationIdSchema,
+      body: familiarLocationUpdateSchema,
+    },
+    responses: [
+      {
+        status: 200,
+        description: 'Updated.',
+        schema: r.familiarLocationResponse,
+      },
+    ],
     errors: [
       unauthorized,
       validationError,
@@ -847,7 +1000,10 @@ export const endpoints: Endpoint[] = [
     auth: 'bearer',
     request: { params: familiarLocationIdSchema },
     responses: [{ status: 204, description: 'Deleted.' }],
-    errors: [unauthorized, { status: 404, code: 'familiar_location_not_found' }],
+    errors: [
+      unauthorized,
+      { status: 404, code: 'familiar_location_not_found' },
+    ],
   },
 
   // --- Plan ------------------------------------------------------------------------------------------------
@@ -871,7 +1027,9 @@ export const endpoints: Endpoint[] = [
     summary: "Set a user's plan (admin only; billing webhook takes over later)",
     auth: 'bearer',
     request: { params: planUserIdSchema, body: planSetSchema },
-    responses: [{ status: 200, description: 'Updated.', schema: r.planResponse }],
+    responses: [
+      { status: 200, description: 'Updated.', schema: r.planResponse },
+    ],
     errors: [
       unauthorized,
       { status: 403, code: 'forbidden', description: 'Not an admin.' },
@@ -916,7 +1074,9 @@ export const endpoints: Endpoint[] = [
     tag: 'Legal',
     summary: 'Current T&C + privacy versions and where the content lives',
     description: 'Public: the app shows the modal before a session exists.',
-    responses: [{ status: 200, description: 'OK.', schema: r.legalDocumentsResponse }],
+    responses: [
+      { status: 200, description: 'OK.', schema: r.legalDocumentsResponse },
+    ],
   },
   {
     method: 'get',
@@ -924,7 +1084,9 @@ export const endpoints: Endpoint[] = [
     tag: 'Legal',
     summary: 'What this user accepted vs current (upToDate: false ⇒ re-prompt)',
     auth: 'bearer',
-    responses: [{ status: 200, description: 'OK.', schema: r.legalStatusResponse }],
+    responses: [
+      { status: 200, description: 'OK.', schema: r.legalStatusResponse },
+    ],
     errors: [unauthorized],
   },
   {
@@ -934,11 +1096,17 @@ export const endpoints: Endpoint[] = [
     summary: 'Record acceptance of one document (send scrolledToEnd: true)',
     auth: 'bearer',
     request: { body: legalAcceptSchema },
-    responses: [{ status: 200, description: 'Recorded.', schema: r.legalAcceptResponse }],
+    responses: [
+      { status: 200, description: 'Recorded.', schema: r.legalAcceptResponse },
+    ],
     errors: [
       unauthorized,
       validationError,
-      { status: 409, code: 'stale_legal_version', description: 'The document changed while it was on screen; reload it.' },
+      {
+        status: 409,
+        code: 'stale_legal_version',
+        description: 'The document changed while it was on screen; reload it.',
+      },
     ],
   },
 ];

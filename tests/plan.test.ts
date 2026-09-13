@@ -101,7 +101,10 @@ describe('PATCH /api/v1/plan/:userId (admin)', () => {
     const upgraded = await request(testServer())
       .patch(`/api/v1/plan/${owner.userId}`)
       .set('Authorization', auth(adminToken))
-      .send({ plan: 'pro', expiresAt: new Date(Date.now() + 86_400_000).toISOString() });
+      .send({
+        plan: 'pro',
+        expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+      });
     expect(upgraded.status).toBe(200);
     expect(upgraded.body.plan.plan).toBe('pro');
     expect(upgraded.body.plan.expiresAt).not.toBeNull();
@@ -110,7 +113,10 @@ describe('PATCH /api/v1/plan/:userId (admin)', () => {
       .patch(`/api/v1/plan/${owner.userId}`)
       .set('Authorization', auth(adminToken))
       .send({ plan: 'free' });
-    expect(downgraded.body.plan).toMatchObject({ plan: 'free', expiresAt: null });
+    expect(downgraded.body.plan).toMatchObject({
+      plan: 'free',
+      expiresAt: null,
+    });
   });
 });
 
@@ -125,7 +131,11 @@ describe('device limit enforcement', () => {
 
     await setPlanDirect(userId, 'family');
     for (let i = 2; i <= 5; i += 1) {
-      const res = await enrol(accessToken, `dev-${i}`, `3569380356438${10 + i}`);
+      const res = await enrol(
+        accessToken,
+        `dev-${i}`,
+        `3569380356438${10 + i}`,
+      );
       expect(res.status).toBe(201);
     }
     const sixth = await enrol(accessToken, 'sixth', '356938035643899');
@@ -150,13 +160,15 @@ describe('device limit enforcement', () => {
       .post('/api/v1/evidence')
       .set('X-Device-Token', a.body.ingestToken as string)
       .send({
-        envelopes: [{
-          id: `plan-${Date.now()}`,
-          type: 'UNLOCK_FAILED',
-          capturedAt: new Date().toISOString(),
-          payload,
-          sha256: sha256Hex(payload),
-        }],
+        envelopes: [
+          {
+            id: `plan-${Date.now()}`,
+            type: 'UNLOCK_FAILED',
+            capturedAt: new Date().toISOString(),
+            payload,
+            sha256: sha256Hex(payload),
+          },
+        ],
       });
     expect(ingest.status).toBe(200);
     expect(ingest.body.results[0].status).toBe('acked');
@@ -175,13 +187,15 @@ describe('history window enforcement', () => {
       .post('/api/v1/evidence')
       .set('X-Device-Token', ingestToken)
       .send({
-        envelopes: [{
-          id: `hist-${Date.now()}`,
-          type: 'UNLOCK_FAILED',
-          capturedAt: new Date().toISOString(),
-          payload,
-          sha256: sha256Hex(payload),
-        }],
+        envelopes: [
+          {
+            id: `hist-${Date.now()}`,
+            type: 'UNLOCK_FAILED',
+            capturedAt: new Date().toISOString(),
+            payload,
+            sha256: sha256Hex(payload),
+          },
+        ],
       });
     // age the envelope past the free window (receivedAt is server-set, so
     // backdating the stored row is the only way to simulate old history)
@@ -222,13 +236,15 @@ describe('trail cadence advisory', () => {
         .post('/api/v1/evidence')
         .set('X-Device-Token', ingestToken)
         .send({
-          envelopes: [{
-            id: `cad-${Date.now()}-${seq}`,
-            type: 'TRAIL_POINT',
-            capturedAt: new Date().toISOString(),
-            payload,
-            sha256: sha256Hex(payload),
-          }],
+          envelopes: [
+            {
+              id: `cad-${Date.now()}-${seq}`,
+              type: 'TRAIL_POINT',
+              capturedAt: new Date().toISOString(),
+              payload,
+              sha256: sha256Hex(payload),
+            },
+          ],
         });
     };
 

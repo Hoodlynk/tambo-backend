@@ -23,20 +23,14 @@ export const CSRF_HEADER = 'x-tambo-csrf';
 export const csrfGuard: RequestHandler = (req, _res, next) => {
   if (!req.get(CSRF_HEADER)) {
     next(
-      new AppError(
-        403,
-        `Missing the ${CSRF_HEADER} header.`,
-        'csrf_rejected',
-      ),
+      new AppError(403, `Missing the ${CSRF_HEADER} header.`, 'csrf_rejected'),
     );
     return;
   }
 
   const origin = req.get('origin');
   if (origin && !config.cors.allowedOrigins.includes(origin)) {
-    next(
-      new AppError(403, 'Origin not allowed.', 'csrf_rejected'),
-    );
+    next(new AppError(403, 'Origin not allowed.', 'csrf_rejected'));
     return;
   }
 

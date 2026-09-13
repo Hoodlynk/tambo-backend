@@ -15,9 +15,7 @@ export const create = async (req: Request, res: Response): Promise<void> => {
 };
 
 export const list = async (req: Request, res: Response): Promise<void> => {
-  const locations = await familiarLocationService.list(
-    authContext(req).userId,
-  );
+  const locations = await familiarLocationService.list(authContext(req).userId);
   res
     .status(200)
     .json({ locations: locations.map((location) => location.toJSON()) });

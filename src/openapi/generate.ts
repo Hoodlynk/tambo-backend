@@ -91,7 +91,9 @@ const operationFor = (endpoint: Endpoint): Record<string, unknown> => {
   for (const [status, errors] of errorsByStatus(endpoint.errors ?? [])) {
     responses[String(status)] = {
       description: errors
-        .map((e) => `\`${e.code}\`${e.description ? ` — ${e.description}` : ''}`)
+        .map(
+          (e) => `\`${e.code}\`${e.description ? ` — ${e.description}` : ''}`,
+        )
         .join(' · '),
       content: {
         'application/json': {
@@ -114,10 +116,10 @@ const operationFor = (endpoint: Endpoint): Record<string, unknown> => {
               ? { description: endpoint.request.bodyDescription }
               : {}),
             content: {
-              [endpoint.request.bodyContentType ?? 'application/json']:
-                endpoint.request.body
-                  ? { schema: toSchema(endpoint.request.body, 'input') }
-                  : { schema: { type: 'string', format: 'binary' } },
+              [endpoint.request.bodyContentType ?? 'application/json']: endpoint
+                .request.body
+                ? { schema: toSchema(endpoint.request.body, 'input') }
+                : { schema: { type: 'string', format: 'binary' } },
             },
           },
         }
@@ -169,7 +171,10 @@ export const buildOpenApiDocument = (): Record<string, unknown> => {
       },
       { name: 'Devices' },
       { name: 'Episodes' },
-      { name: 'Evidence', description: 'Device-token auth (X-Device-Token), not user auth.' },
+      {
+        name: 'Evidence',
+        description: 'Device-token auth (X-Device-Token), not user auth.',
+      },
       { name: 'Buddies' },
       { name: 'Push' },
       { name: 'Plan' },
