@@ -31,24 +31,21 @@ export const register = async (
       ...(input.userAgent ? { userAgent: input.userAgent } : {}),
     },
   };
-  let row: IPushToken;
-  try {
-    row = await PushToken.findOneAndUpdate({ token: input.token }, update, {
+  // Two concurrent first registrations of the same token can both miss the
+  // upsert's find, and the losing insert hits the unique index. Registration
+  // is documented as always-idempotent, so the loser retries the SAME upsert
+  // (a plain update could miss again if the row was pruned in between).
+  const attempt = (): Promise<IPushToken> =>
+    PushToken.findOneAndUpdate({ token: input.token }, update, {
       new: true,
       upsert: true,
     });
+  let row: IPushToken;
+  try {
+    row = await attempt();
   } catch (error) {
-    // two concurrent first registrations of the same token: the upsert's
-    // find can miss for both, and the losing insert hits the unique index.
-    // Registration is documented as always-idempotent, so retry as an update.
     if (!isDuplicateKeyError(error)) throw error;
-    const retried = await PushToken.findOneAndUpdate(
-      { token: input.token },
-      update,
-      { new: true },
-    );
-    if (!retried) throw error;
-    row = retried;
+    row = await attempt();
   }
 
   // cap per user, evicting least-recently-seen. Not atomic with the upsert -

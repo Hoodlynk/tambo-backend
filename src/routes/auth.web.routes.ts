@@ -4,14 +4,20 @@ import * as authWebController from '../controllers/auth.web.controller';
 import { csrfGuard } from '../middlewares/csrf.middleware';
 import { rateLimit, bodyField } from '../middlewares/rateLimit';
 import { validate } from '../middlewares/validate';
-import { loginSchema, otpVerifySchema } from '../validation/auth.schema';
+import {
+  loginSchema,
+  otpVerifySchema,
+  resetPasswordSchema,
+} from '../validation/auth.schema';
 import { asyncHandler } from '../utils/asyncHandler';
 
 /**
  * The browser (PWA) session surface: the refresh token lives in an httpOnly
  * cookie (path-scoped to this mount), so page scripts can never exfiltrate it.
- * Register, forgot- and reset-password are cookie-irrelevant and shared with
- * /api/auth. Every route here consumes or sets the cookie, so every route
+ * Register and forgot-password are cookie-irrelevant and shared with
+ * /api/auth; reset-password has a web variant because it ISSUES a session,
+ * which must arrive as a cookie here. Every route here consumes or sets the
+ * cookie, so every route
  * carries the CSRF guard; the cookie parser is mounted here, not app-wide -
  * no other surface reads cookies.
  *
@@ -43,6 +49,14 @@ router.post(
   '/refresh',
   rateLimit({ name: 'refresh' }),
   asyncHandler(authWebController.refresh),
+);
+
+// recovery lands IN the cookie flow: body-token reset would strand the PWA
+router.post(
+  '/reset-password',
+  validate({ body: resetPasswordSchema }),
+  rateLimit({ name: 'resetPassword' }),
+  asyncHandler(authWebController.resetPassword),
 );
 
 router.post('/logout', asyncHandler(authWebController.logout));

@@ -230,6 +230,17 @@ describe('trail cadence advisory', () => {
       .post(`/api/v1/devices/${deviceId}/mark-stolen`)
       .set('Authorization', auth(accessToken))
       .send({});
+    // drain the fire-and-forget first alert so it cannot leak past afterEach
+    {
+      const PackDelivery = (await import('../src/models/packDelivery.model'))
+        .default;
+      const start = Date.now();
+      while (Date.now() - start < 3000) {
+        if ((await PackDelivery.countDocuments({ kind: 'first_alert' })) >= 1)
+          break;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    }
 
     let seq = 0;
     const send = () => {

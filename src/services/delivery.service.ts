@@ -15,6 +15,7 @@ import type { MailMessage } from './mailer';
 import * as notifier from './notifier.service';
 import type { PushContent } from './notifier.service';
 import { buildPack, getOwnedEpisode } from './pack.service';
+import { logger } from '../utils/logger';
 import { renderPackPdf } from './pack.pdf';
 import * as pushTokenService from './pushToken.service';
 
@@ -62,6 +63,19 @@ const claim = async (
   } catch (error) {
     if (isDuplicateKeyError(error)) return false; // already alerted
     throw error;
+  }
+};
+
+/** allSettled keeps the fan-out alive past one failure - but a failed CLAIM
+ *  (a DB error, not a dedupe loss) must never vanish without a trace. */
+const logRejected = (
+  settled: PromiseSettledResult<unknown>[],
+  message: string,
+): void => {
+  for (const result of settled) {
+    if (result.status === 'rejected') {
+      logger.error({ err: result.reason }, message);
+    }
   }
 };
 
@@ -194,11 +208,12 @@ export const sendFirstAlert = async (
   const buddyIds = await buddyService.activeBuddyUserIds(
     episode.user.toString(),
   );
-  await Promise.allSettled(
+  const settled = await Promise.allSettled(
     [episode.user.toString(), ...buddyIds].map((userId) =>
       claimAndPush(episode, 'first_alert', userId, push),
     ),
   );
+  logRejected(settled, 'first_alert push claim failed');
 };
 
 export interface PackSendResult {
@@ -274,11 +289,12 @@ export const sendPack = async (
   // same mechanism as the first alert (claim, then dispatch to the same
   // token set); full_pack claims are audit rows, never deduped, and the
   // per-recipient sends are independent - fan out in parallel
-  await Promise.allSettled(
+  const settled = await Promise.allSettled(
     pushRecipients.map((recipientId) =>
       claimAndPush(episode, 'full_pack', recipientId, nudge),
     ),
   );
+  logRejected(settled, 'full_pack push claim failed');
 
   return { recipients };
 };

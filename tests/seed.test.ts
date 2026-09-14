@@ -1,6 +1,8 @@
 import request from 'supertest';
 import { testServer } from './setup/testServer';
-import { seed } from '../scripts/seed-dev';
+import { SEED_EMAIL, seed } from '../scripts/seed-dev';
+import Device from '../src/models/device.model';
+import User from '../src/models/user.model';
 import { noopMailer } from '../src/services/mailer/noop.mailer';
 import { clearTestDb, closeTestDb, connectTestDb } from './helpers/db';
 
@@ -36,9 +38,12 @@ describe('scripts/seed-dev', () => {
     expect(pack.status).toBe(200);
     expect(pack.body.pack.unlockAttempts).toHaveLength(1);
 
-    // re-running never duplicates the owner
+    // re-running replaces the ENTIRE footprint, never duplicates it
     const again = await seed();
-    expect(again.userId).not.toBe(seeded.userId); // fresh user, old one removed
+    expect(again.userId).not.toBe(seeded.userId);
+    expect(await User.countDocuments({ email: SEED_EMAIL })).toBe(1);
+    expect(await Device.countDocuments({})).toBe(1); // no orphaned device
+    expect(await Device.countDocuments({ user: seeded.userId })).toBe(0);
     const relisted = await request(testServer())
       .get('/api/v1/episodes')
       .set({ Authorization: `Bearer ${again.accessToken}` });

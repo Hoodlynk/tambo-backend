@@ -593,6 +593,115 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/web/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete a password reset; the session arrives as a cookie
+         * @description Same token semantics as /auth/reset-password, but the fresh session is set as the httpOnly cookie (never in the body) so the PWA recovery flow stays inside the cookie transport.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description CSRF guard for the cookie surface; any value (e.g. "1"). A cross-site page cannot set custom headers without a CORS preflight, which the origin allowlist rejects. */
+                    "X-Tambo-Csrf": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        token: string;
+                        password: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Password set; cookie session issued. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            user: {
+                                _id: string;
+                                name: string;
+                                email?: string;
+                                phone?: string;
+                                /** @enum {string} */
+                                role: "user" | "admin";
+                                /** @description ISO-8601 timestamp */
+                                emailVerifiedAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                phoneVerifiedAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                                /** @description ISO-8601 timestamp */
+                                updatedAt: string;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                            tokens: {
+                                /** @description Hold in memory only - never in storage. */
+                                accessToken: string;
+                                expiresIn: string;
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_reset_token` */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `csrf_rejected` */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/web/logout": {
         parameters: {
             query?: never;
@@ -1237,7 +1346,7 @@ export interface paths {
                         "application/json": {
                             events: {
                                 /** @enum {string} */
-                                type: "login_succeeded" | "login_failed" | "login_challenged" | "otp_verified" | "otp_failed" | "password_changed" | "email_changed" | "password_reset_requested" | "password_reset" | "sessions_revoked_all" | "session_revoked" | "account_locked";
+                                type: "login_succeeded" | "login_failed" | "login_challenged" | "otp_verified" | "otp_failed" | "password_changed" | "email_changed" | "password_reset_requested" | "password_reset" | "sessions_revoked_all" | "session_revoked" | "account_locked" | "plan_changed";
                                 /** @description ISO-8601 timestamp */
                                 at: string;
                                 ip?: string;

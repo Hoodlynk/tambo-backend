@@ -299,14 +299,16 @@ surface; a token issued on one surface is valid on the other.
 | `POST /api/auth/web/login` | `{ email, password }` | 200 `{ user, tokens: { accessToken, expiresIn } }` + cookie, or `{ challenge }` (no cookie) |
 | `POST /api/auth/web/otp/verify` | `{ challengeId, code }` | completes any challenge; sets the cookie |
 | `POST /api/auth/web/refresh` | — | cookie in, rotated cookie out; `missing_refresh_cookie` (401) without it |
+| `POST /api/auth/web/reset-password` | `{ token, password }` | completes recovery; the fresh session arrives as the cookie |
 | `POST /api/auth/web/logout` | — | revokes + clears the cookie; idempotent 204 |
 
 **Every request needs**: the `X-Tambo-Csrf` header (any value — it forces a
 CORS preflight, which the origin allowlist rejects for foreign origins;
 missing/foreign-origin ⇒ 403 `csrf_rejected`), and `credentials: 'include'`
 on the fetch. The PWA's origin must be listed in `CORS_ALLOWED_ORIGINS`.
-Register, forgot-password and reset-password have no cookie involvement — use
-the shared `/api/auth` routes.
+Register and forgot-password have no cookie involvement — use the shared
+`/api/auth` routes. Reset-password DOES issue a session, so the PWA uses the
+web variant above; the body-token `/auth/reset-password` is for mobile.
 
 ## Error code index
 

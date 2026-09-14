@@ -111,7 +111,7 @@ Delivery properties worth knowing:
 - The email names the device, the trigger ("repeated failed unlock attempts
   were detected"), the time, and first steps (block SIM, get an OB number).
 - Later, the **full evidence-pack PDF** goes to the same recipient list
-  (`sendFullPack`, same file). Pack sends are audited but *not* deduped —
+  (`sendPack`, same file). Pack sends are audited but *not* deduped —
   re-sending with more evidence is legitimate.
 
 Mail transport is pluggable (`src/services/mailer/`): `MAIL_DRIVER=resend`

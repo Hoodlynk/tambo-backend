@@ -23,12 +23,9 @@ export interface IFamiliarLocation extends Document<Types.ObjectId> {
 
 const familiarLocationSchema = new Schema<IFamiliarLocation>(
   {
-    user: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-      index: true,
-    },
+    // no single-field index: the unique {user, label} compound below covers
+    // every find({user}) as a prefix
+    user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     label: { type: String, required: true, trim: true },
     lat: { type: Number, required: true },
     lng: { type: Number, required: true },

@@ -985,6 +985,176 @@
         "security": []
       }
     },
+    "/api/auth/web/reset-password": {
+      "post": {
+        "tags": [
+          "Auth (web)"
+        ],
+        "summary": "Complete a password reset; the session arrives as a cookie",
+        "description": "Same token semantics as /auth/reset-password, but the fresh session is set as the httpOnly cookie (never in the body) so the PWA recovery flow stays inside the cookie transport.",
+        "parameters": [
+          {
+            "name": "X-Tambo-Csrf",
+            "in": "header",
+            "required": true,
+            "description": "CSRF guard for the cookie surface; any value (e.g. \"1\"). A cross-site page cannot set custom headers without a CORS preflight, which the origin allowlist rejects.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 8
+                  }
+                },
+                "required": [
+                  "token",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password set; cookie session issued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "phone": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "admin"
+                          ]
+                        },
+                        "emailVerifiedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "phoneVerifiedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "name",
+                        "role",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "tokens": {
+                      "type": "object",
+                      "properties": {
+                        "accessToken": {
+                          "type": "string",
+                          "description": "Hold in memory only - never in storage."
+                        },
+                        "expiresIn": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "accessToken",
+                        "expiresIn"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "user",
+                    "tokens"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_reset_token`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf_rejected`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
     "/api/auth/web/logout": {
       "post": {
         "tags": [
@@ -1769,7 +1939,8 @@
                               "password_reset",
                               "sessions_revoked_all",
                               "session_revoked",
-                              "account_locked"
+                              "account_locked",
+                              "plan_changed"
                             ]
                           },
                           "at": {

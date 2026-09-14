@@ -119,6 +119,23 @@ export const invite = async (
 
   const buddyUser = await User.findOne({ email: input.email });
 
+  // identity is the HUMAN, not the address: after the buddy changes their
+  // email, re-inviting the new address must not create a second live link to
+  // the same person (which would double their full-pack mails and burn slots)
+  if (buddyUser) {
+    const sameHuman = await Buddy.findOne({
+      owner: ownerId,
+      buddy: buddyUser._id,
+      status: { $in: ['pending', 'active'] },
+    });
+    if (sameHuman && sameHuman.inviteEmail !== input.email) {
+      throw AppError.conflict(
+        'You have already invited that person.',
+        'buddy_exists',
+      );
+    }
+  }
+
   let link: IBuddy;
   if (existing) {
     // a previously declined/revoked link is re-invited in place
@@ -227,14 +244,17 @@ export const bindPendingInvites = async (user: IUser): Promise<void> => {
   );
 };
 
-/** Emails of the owner's ACCEPTED buddies - the alert fan-out (delivery.service). */
+/** Emails of the owner's ACCEPTED buddies - the alert fan-out (delivery.service).
+ *  Deduplicated: two historical links resolving to one human's current email
+ *  must not double their mail. */
 export const activeBuddyEmails = async (ownerId: string): Promise<string[]> => {
   const links = await Buddy.find({ owner: ownerId, status: 'active' }).populate(
     'buddy',
   );
-  return links
+  const emails = links
     .map((link) => (link.buddy as unknown as IUser | null)?.email)
     .filter((email): email is string => Boolean(email));
+  return [...new Set(emails)];
 };
 
 /** User ids of ACCEPTED buddies - the push fan-out (delivery.service). */
@@ -246,7 +266,8 @@ export const activeBuddyUserIds = async (
     status: 'active',
     buddy: { $exists: true },
   }).select('buddy');
-  return links
+  const ids = links
     .map((link) => link.buddy?.toString())
     .filter((id): id is string => Boolean(id));
+  return [...new Set(ids)];
 };

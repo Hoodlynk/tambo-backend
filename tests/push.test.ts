@@ -3,7 +3,10 @@ import { testServer } from './setup/testServer';
 import config from '../src/config/config';
 import PackDelivery from '../src/models/packDelivery.model';
 import PushToken from '../src/models/pushToken.model';
+import Device from '../src/models/device.model';
+import TheftEpisode from '../src/models/theftEpisode.model';
 import User from '../src/models/user.model';
+import * as deliveryService from '../src/services/delivery.service';
 import { noopMailer } from '../src/services/mailer/noop.mailer';
 import { noopPusher } from '../src/services/push/noop.push';
 import { clearTestDb, closeTestDb, connectTestDb } from './helpers/db';
@@ -82,7 +85,7 @@ describe('POST /api/v1/push-tokens', () => {
     expect(second.status).toBe(200);
     expect(
       new Date(second.body.pushToken.lastSeenAt).getTime(),
-    ).toBeGreaterThanOrEqual(before);
+    ).toBeGreaterThan(before);
 
     expect(await PushToken.countDocuments({ user: userId })).toBe(1);
   });
@@ -137,6 +140,46 @@ describe('POST /api/v1/push-tokens', () => {
       .send({ token: TOKEN_A });
     expect(own.status).toBe(204);
     expect(await PushToken.exists({ token: TOKEN_A })).toBeNull();
+  });
+});
+
+describe('registration race', () => {
+  it('a lost upsert race retries idempotently instead of surfacing 409', async () => {
+    const { accessToken } = await registerUser();
+    // deterministically simulate the race: first upsert loses to the unique
+    // index, the retry (same upsert) wins
+    const original = PushToken.findOneAndUpdate.bind(PushToken);
+    const spy = jest
+      .spyOn(PushToken, 'findOneAndUpdate')
+      .mockImplementationOnce(() => {
+        const err = new Error('E11000 duplicate key') as Error & {
+          code: number;
+        };
+        err.code = 11000;
+        throw err;
+      });
+    try {
+      const res = await registerToken(accessToken, TOKEN_A);
+      expect(res.status).toBe(200);
+      expect(await PushToken.countDocuments({ token: TOKEN_A })).toBe(1);
+    } finally {
+      spy.mockRestore();
+      void original;
+    }
+  });
+});
+
+describe('credential rotation evicts push delivery', () => {
+  it('revoking all sessions deletes the push registry (stolen devices stop hearing alerts)', async () => {
+    const { accessToken, userId } = await registerUser();
+    await registerToken(accessToken, TOKEN_A);
+    expect(await PushToken.countDocuments({ user: userId })).toBe(1);
+
+    await request(testServer())
+      .post('/api/auth/logout-all')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(await PushToken.countDocuments({ user: userId })).toBe(0);
   });
 });
 
@@ -230,6 +273,45 @@ describe('first-alert push fan-out', () => {
       async () => (await PushToken.exists({ token: TOKEN_B })) === null,
     );
     expect(await PushToken.exists({ token: TOKEN_A })).not.toBeNull();
+  });
+});
+
+describe('concurrent first-alert claims (the mechanism itself)', () => {
+  it('two sendFirstAlert calls racing on one episode alert each human once per channel', async () => {
+    const { accessToken, userId } = await registerUser();
+    await upgradeToPro(userId);
+    await registerToken(accessToken, TOKEN_A);
+    const deviceId = await enrolAndSteal(accessToken);
+    await until(
+      async () =>
+        (await PackDelivery.countDocuments({ kind: 'first_alert' })) >= 2,
+    );
+    await PackDelivery.deleteMany({}); // reset the ledger; keep the episode
+    noopPusher.clear();
+    noopMailer.clear();
+
+    const episode = await TheftEpisode.findOne({ status: 'open' });
+    const device = await Device.findById(deviceId);
+    if (!episode || !device) throw new Error('scene incomplete');
+
+    // the true race the HTTP surface cannot produce: both openers fire the
+    // alert for the SAME episode concurrently; the unique-claim must referee
+    await Promise.all([
+      deliveryService.sendFirstAlert(episode, device),
+      deliveryService.sendFirstAlert(episode, device),
+    ]);
+    await until(
+      async () =>
+        (await PackDelivery.countDocuments({ kind: 'first_alert' })) >= 2,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    const rows = await PackDelivery.find({ kind: 'first_alert' });
+    expect(rows.map((row) => row.channel).sort()).toEqual(['email', 'push']);
+    expect(noopPusher.sent).toHaveLength(1);
+    expect(
+      noopMailer.sent.filter((m) => m.subject.includes('may be stolen')),
+    ).toHaveLength(1);
   });
 });
 

@@ -14,6 +14,7 @@ export const AUTH_EVENT_TYPES = [
   'sessions_revoked_all',
   'session_revoked',
   'account_locked',
+  'plan_changed',
 ] as const;
 export type AuthEventType = (typeof AUTH_EVENT_TYPES)[number];
 

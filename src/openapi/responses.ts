@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { AUTH_EVENT_TYPES } from '../models/authEvent.model';
 import { OTP_PURPOSES } from '../models/otpChallenge.model';
+import { PUSH_PLATFORMS } from '../models/pushToken.model';
+import { USER_PLANS } from '../models/user.model';
 
 /**
  * Response-body schemas for the OpenAPI document. Requests are described by
@@ -334,7 +336,7 @@ export const familiarLocationsResponse = z.object({
 
 // --- Plan --------------------------------------------------------------------------------
 
-const planName = z.enum(['free', 'pro', 'family']);
+const planName = z.enum(USER_PLANS);
 
 export const planResponse = z.object({
   plan: z.object({
@@ -359,7 +361,7 @@ export const planResponse = z.object({
 
 export const pushTokenResponse = z.object({
   pushToken: z.object({
-    platform: z.enum(['android', 'web', 'ios']),
+    platform: z.enum(PUSH_PLATFORMS),
     lastSeenAt: isoDate,
   }),
 });

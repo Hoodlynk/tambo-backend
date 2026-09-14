@@ -191,6 +191,16 @@ const parseMailDriver = (): MailDriver => {
   return raw as MailDriver;
 };
 
+/** Positive-integer env knob: garbage or zero refuses to boot (house rule). */
+const positiveInt = (key: string, fallback: number): number => {
+  const raw = process.env[key];
+  if (raw === undefined || raw === '') return fallback;
+  if (!/^\d+$/.test(raw) || Number(raw) < 1) {
+    throw new Error(`${key} must be a positive integer; got "${raw}".`);
+  }
+  return Number(raw);
+};
+
 /** Mirror of parseMailDriver: a typo'd push driver must fail at boot. */
 const parsePushDriver = (): PushDriver => {
   const raw =
@@ -355,8 +365,8 @@ const config: Config = {
     level: process.env.LOG_LEVEL || (rawNodeEnv === 'test' ? 'silent' : 'info'),
   },
   lockout: {
-    threshold: Number(process.env.LOCKOUT_THRESHOLD) || 10,
-    durationMinutes: Number(process.env.LOCKOUT_DURATION_MINUTES) || 15,
+    threshold: positiveInt('LOCKOUT_THRESHOLD', 10),
+    durationMinutes: positiveInt('LOCKOUT_DURATION_MINUTES', 15),
   },
   push: {
     driver: parsePushDriver(),
@@ -365,7 +375,7 @@ const config: Config = {
     // would make every send to a heavy user fail outright
     maxTokensPerUser: Math.min(
       500,
-      Number(process.env.PUSH_MAX_TOKENS_PER_USER) || 10,
+      positiveInt('PUSH_MAX_TOKENS_PER_USER', 10),
     ),
   },
   authCookie: parseAuthCookie(),

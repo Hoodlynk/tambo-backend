@@ -50,6 +50,7 @@ describe('POST /api/auth/web/login', () => {
 
     const cookie = refreshCookieOf(res);
     expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('Secure');
     expect(cookie).toContain('Path=/api/auth/web');
     expect(cookie).toContain('SameSite=Lax');
     expect(cookie).toContain('Max-Age=');
@@ -96,6 +97,17 @@ describe('CSRF guard', () => {
     } finally {
       config.cors.allowedOrigins.pop();
     }
+  });
+
+  it("accepts the API's own origin - a same-origin PWA needs no allowlist entry", async () => {
+    await registerUser();
+    const own = new URL(config.publicApiUrl).origin;
+    const res = await request(testServer())
+      .post('/api/auth/web/login')
+      .set(CSRF)
+      .set('Origin', own)
+      .send({ email: CREDENTIALS.email, password: CREDENTIALS.password });
+    expect(res.status).toBe(200);
   });
 
   it('rejects a browser Origin that is not on the CORS allowlist', async () => {
@@ -172,6 +184,48 @@ describe('POST /api/auth/web/logout', () => {
       .post('/api/auth/web/logout')
       .set(CSRF);
     expect(again.status).toBe(204);
+  });
+});
+
+describe('cookie attribute configuration', () => {
+  it('emits the configured SameSite value', async () => {
+    await registerUser();
+    const previous = config.authCookie.sameSite;
+    (config.authCookie as { sameSite: string }).sameSite = 'strict';
+    try {
+      const res = await webLogin();
+      expect(refreshCookieOf(res)).toContain('SameSite=Strict');
+    } finally {
+      (config.authCookie as { sameSite: string }).sameSite = previous;
+    }
+  });
+});
+
+describe('POST /api/auth/web/reset-password', () => {
+  it('completes recovery INSIDE the cookie flow - session as cookie, never in the body', async () => {
+    await registerUser();
+    noopMailer.clear();
+    await request(testServer())
+      .post('/api/auth/forgot-password')
+      .send({ email: CREDENTIALS.email });
+    const mail = noopMailer.sent.find((m) => m.subject.includes('Reset'));
+    const token = /token=([\w-]+)/.exec(mail?.text ?? '')?.[1];
+    expect(token).toBeTruthy();
+
+    const res = await request(testServer())
+      .post('/api/auth/web/reset-password')
+      .set(CSRF)
+      .send({ token, password: 'recovered-password-1' });
+    expect(res.status).toBe(200);
+    expect(res.body.tokens.refreshToken).toBeUndefined();
+    const pair = cookiePairOf(res);
+
+    // the cookie session is live: refresh rotates it
+    const refreshed = await request(testServer())
+      .post('/api/auth/web/refresh')
+      .set(CSRF)
+      .set('Cookie', pair);
+    expect(refreshed.status).toBe(200);
   });
 });
 

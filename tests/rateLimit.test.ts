@@ -149,3 +149,22 @@ describe('rate limiting disabled', () => {
     }
   });
 });
+
+describe('rate limiting vs account lockout', () => {
+  it('429 fires first and throttled attempts never advance the lockout counter', async () => {
+    const { userId } = await registerUser();
+    const User = (await import('../src/models/user.model')).default;
+
+    expect((await attemptLogin('wrong-one')).status).toBe(401);
+    expect((await attemptLogin('wrong-two')).status).toBe(401);
+    // budget spent: everything below is 429 and must not touch the account
+    for (let i = 0; i < 5; i += 1) {
+      expect((await attemptLogin('wrong-again')).status).toBe(429);
+    }
+
+    const user = await User.findById(userId);
+    // only the two REAL attempts counted; the limiter shields the lockout
+    expect(user?.failedLoginAttempts).toBe(2);
+    expect(user?.lockedUntil).toBeUndefined();
+  });
+});

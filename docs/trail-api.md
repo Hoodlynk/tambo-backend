@@ -60,6 +60,11 @@ Envelopes without a usable fix are skipped, never an error.
 
 Errors: `episode_not_found` (404, also for another user's episode).
 
+Volume bound: pathological episodes are windowed to the most recent **5000**
+location-bearing envelopes (the current location always survives). Movement
+classification ignores fixes coarser than 250m accuracy when precise fixes
+exist; with only coarse fixes it falls back to the accuracy-widened radius.
+
 ## 2. Familiar locations — `/api/v1/familiar-locations` (Bearer JWT)
 
 Owner-entered places, capped at **10** per account.

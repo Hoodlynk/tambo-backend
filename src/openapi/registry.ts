@@ -289,6 +289,29 @@ export const endpoints: Endpoint[] = [
   },
   {
     method: 'post',
+    path: '/api/auth/web/reset-password',
+    tag: 'Auth (web)',
+    summary: 'Complete a password reset; the session arrives as a cookie',
+    description:
+      'Same token semantics as /auth/reset-password, but the fresh session ' +
+      'is set as the httpOnly cookie (never in the body) so the PWA recovery ' +
+      'flow stays inside the cookie transport.',
+    request: { body: resetPasswordSchema, headers: [csrfHeader] },
+    responses: [
+      {
+        status: 200,
+        description: 'Password set; cookie session issued.',
+        schema: r.webAuthResponse,
+      },
+    ],
+    errors: [
+      { status: 401, code: 'invalid_reset_token' },
+      { status: 403, code: 'csrf_rejected' },
+      rateLimited,
+    ],
+  },
+  {
+    method: 'post',
     path: '/api/auth/web/logout',
     tag: 'Auth (web)',
     summary: 'Revoke the cookie session and clear the cookie (idempotent)',

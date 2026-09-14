@@ -71,34 +71,41 @@ const CLASSIFICATION_ACCURACY_CEILING_M = 250;
  *  location always matters most); the cap is far beyond a realistic episode. */
 export const TRAIL_POINT_CAP = 5000;
 
-/** static if every reliable fix is within max(150m, 2x worst accuracy) of the first. */
-export const classifyMovement = (
+const classifyOver = (
   points: Pick<TrailPoint, 'lat' | 'lng' | 'accuracyM'>[],
 ): Movement => {
-  const reliable = points.filter(
-    (point) => (point.accuracyM ?? 0) <= CLASSIFICATION_ACCURACY_CEILING_M,
-  );
-  if (reliable.length < 2) return 'unknown';
-
-  const worstAccuracy = reliable.reduce(
+  if (points.length < 2) return 'unknown';
+  const worstAccuracy = points.reduce(
     (worst, point) => Math.max(worst, point.accuracyM ?? 0),
     0,
   );
   const staticRadiusM = Math.max(STATIC_RADIUS_FLOOR_M, 2 * worstAccuracy);
-
-  const [first, ...rest] = reliable;
+  const [first, ...rest] = points;
   if (!first) return 'unknown';
   return rest.every((point) => haversineMeters(first, point) <= staticRadiusM)
     ? 'static'
     : 'moving';
 };
 
-const findDeparture = (points: TrailPoint[]): FamiliarDeparture | null => {
-  // a trail that ENDS inside a familiar place has not "left" it - a walk
-  // around the block must not put a bold theft cue in a police document
-  const last = points[points.length - 1];
-  if (!last || last.familiar) return null;
+/**
+ * static if every fix is within max(150m, 2x worst accuracy) of the first.
+ * Classified on the PRECISE fixes when at least two exist (so one coarse
+ * cell-tower fix cannot widen the radius until a real move reads as static);
+ * with only coarse fixes available - the typical GPS-denied theft posture -
+ * classification falls back to the whole set with the accuracy-widened
+ * radius: displacement far beyond the fixes' own error is still decisive
+ * movement, and must still produce the leftFamiliar cue.
+ */
+export const classifyMovement = (
+  points: Pick<TrailPoint, 'lat' | 'lng' | 'accuracyM'>[],
+): Movement => {
+  const reliable = points.filter(
+    (point) => (point.accuracyM ?? 0) <= CLASSIFICATION_ACCURACY_CEILING_M,
+  );
+  return reliable.length >= 2 ? classifyOver(reliable) : classifyOver(points);
+};
 
+const findDeparture = (points: TrailPoint[]): FamiliarDeparture | null => {
   let departure: FamiliarDeparture | null = null;
   for (let i = 1; i < points.length; i += 1) {
     const previous = points[i - 1];
@@ -107,6 +114,13 @@ const findDeparture = (points: TrailPoint[]): FamiliarDeparture | null => {
       departure = { label: previous.familiar.label, at: current.at };
     }
   }
+
+  // a trail that ENDS back inside the place it departed has not "left" it -
+  // a walk around the block must not put a bold theft cue in a police
+  // document. Ending inside a DIFFERENT familiar place does not suppress it:
+  // a phone that left home and sits at the owner's gym still left home.
+  const last = points[points.length - 1];
+  if (departure && last?.familiar?.label === departure.label) return null;
   return departure;
 };
 

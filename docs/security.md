@@ -58,6 +58,7 @@ Every path that should evict an attacker does:
 | Password changed | All sessions revoked, all outstanding reset links invalidated, fresh pair returned |
 | Password reset | All sessions revoked, all other reset links invalidated, fresh pair returned |
 | `/logout-all` | All sessions revoked |
+| Any bulk revocation above | The account's push-token registry is deleted too - an evicted device stops receiving theft alerts (apps re-register on next start) |
 | `DELETE /sessions/:id` | That session revoked |
 
 Refresh rotation, reset-token consumption, and OTP consumption all use an

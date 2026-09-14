@@ -9,7 +9,7 @@ import {
   readRefreshCookie,
   setRefreshCookie,
 } from '../utils/refreshCookie';
-import type { LoginInput } from '../validation/auth.schema';
+import type { LoginInput, ResetPasswordInput } from '../validation/auth.schema';
 import { isChallenge, sendChallenge, userAgentOf } from './auth.controller';
 
 /**
@@ -82,6 +82,23 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
     userAgentOf(req),
   );
   sendWebAuthResult(res, result);
+};
+
+/** Reset completes with a cookie session - the PWA must never hold a body
+ *  refresh token, and a reset that strands the user at re-login defeats the
+ *  recovery flow. */
+export const resetPassword = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  sendWebAuthResult(
+    res,
+    await passwordCredential.resetPassword(
+      req.body as ResetPasswordInput,
+      userAgentOf(req),
+      req.ip,
+    ),
+  );
 };
 
 export const logout = async (req: Request, res: Response): Promise<void> => {

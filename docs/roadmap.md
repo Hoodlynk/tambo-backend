@@ -6,9 +6,16 @@ Last updated: 2026-09-13.
 **Active program (approved 2026-09-13)**: depth-first client-readiness &
 completion plan — Phase 0 API contract (✅) → 1 PWA cookie auth (✅) →
 2 FCM push (✅) → 3 entitlements (✅) → 4 observability (✅) → 5 CI (✅) →
-6 onboarding (✅). **The program is complete**, followed by a deep 10-angle
-review (2026-09-14) whose confirmed findings were all fixed - see that
-commit's message for the list.
+6 onboarding (✅). **The program is complete**, followed by TWO audit passes
+(2026-09-14): a 10-angle deep review, then a second pass (fix-commit
+regression audit, end-to-end lifecycle traces, data-model/index audit,
+test-quality audit, plus a LIVE smoke test of the dev server, the compiled
+production build, and the full theft journey over HTTP). All confirmed
+findings from both passes are fixed - see the two fix commits for the lists.
+Second-pass live verification: register→OTP→legal→enrol→ingest→threshold
+auto-open→alert→trail→signed PDF, web cookie login/refresh/reset, CSRF
+accept/reject paths, device_limit, rate limiting - all exercised against the
+running server.
 
 ### ✅ Phase 6 — Onboarding & readability (2026-09-13)
 CLAUDE.md (the working rules, incl. the OpenAPI-registry and entitlements
@@ -141,6 +148,13 @@ Committed and pushed 2026-09-05.**
 ---
 
 ## Open items
+
+### ⬜ Episode archival on device removal
+Deleting a device deletes its resolved episodes; evidence ages out on TTL and
+past packs become unbuildable (documented caveat in devices-api.md). Design an
+archive: either forbid removal while unexported episodes exist, or snapshot
+the pack JSON/PDF to storage at removal time. Surfaced by the 2026-09-14
+lifecycle audit.
 
 ### 👤 Immediate human actions
 1. ✅ **Commit the work** — committed as a series and pushed (2026-09-04).

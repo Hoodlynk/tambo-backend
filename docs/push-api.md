@@ -56,6 +56,11 @@ Design rules the clients can rely on:
   retried. Email is the guaranteed backbone; push is the fast lane.
 - **Dead-token hygiene is server-side**: when FCM reports a token dead at send
   time, the row is deleted. Clients never manage registry state.
+- **Credential rotation evicts push too**: password change/reset, email
+  change, and "sign out everywhere" delete the account's whole push registry
+  - a stolen, signed-out device must not keep hearing theft alerts. Your own
+  app re-registers on next start (which is why registering on every start is
+  the contract).
 
 ## Operator setup (human action)
 
@@ -64,8 +69,11 @@ Design rules the clients can rely on:
 3. `FCM_SERVICE_ACCOUNT_JSON=$(base64 < service-account.json)` and
    `PUSH_DRIVER=fcm`. A typo'd driver, missing credential, or corrupt base64
    refuses to boot.
-4. Deploy note (first deploy with push): the first-alert unique index changed
-   to include `channel`; mongoose creates the new index at boot but never
-   drops the old `{episode, recipient, kind}` one - drop it manually once.
+4. Deploy note (first deploy with push): the first-alert unique index now
+   includes `channel`. Mongoose creates the new index at boot but never drops
+   the old `{episode, recipient, kind}` one. Before dropping it manually,
+   backfill `channel: 'email'` onto pre-deploy first_alert rows - old rows
+   have no stored channel and would fall out of the new index's dedupe once
+   the old index is gone.
 5. Client apps configure their own `google-services.json` / web push
    certificates from the same Firebase project.

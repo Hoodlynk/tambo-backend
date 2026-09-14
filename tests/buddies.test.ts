@@ -4,6 +4,7 @@ import config from '../src/config/config';
 import Buddy from '../src/models/buddy.model';
 import { noopMailer } from '../src/services/mailer/noop.mailer';
 import { clearTestDb, closeTestDb, connectTestDb } from './helpers/db';
+import User from '../src/models/user.model';
 import { registerUser } from './helpers/factories';
 
 beforeAll(connectTestDb, 120_000);
@@ -250,5 +251,39 @@ describe('buddy-side isolation', () => {
     expect(
       (await request(testServer()).get('/api/v1/buddy-invites')).status,
     ).toBe(401);
+  });
+});
+
+describe('buddy identity survives an email change', () => {
+  it("re-inviting the buddy's NEW address does not create a second live link to the same human", async () => {
+    const owner = await registerUser();
+    const buddy = await registerUser({ email: 'pal@tambo.app' });
+
+    await request(testServer())
+      .post('/api/v1/buddies')
+      .set('Authorization', `Bearer ${owner.accessToken}`)
+      .send({ email: 'pal@tambo.app' });
+    const invites = await request(testServer())
+      .get('/api/v1/buddy-invites')
+      .set('Authorization', `Bearer ${buddy.accessToken}`);
+    await request(testServer())
+      .post(`/api/v1/buddy-invites/${invites.body.invites[0].id}/accept`)
+      .set('Authorization', `Bearer ${buddy.accessToken}`);
+
+    // the buddy changes their address (simulating a completed email_change)
+    await User.updateOne(
+      { _id: buddy.userId },
+      { $set: { email: 'pal-new@tambo.app' } },
+    );
+
+    const again = await request(testServer())
+      .post('/api/v1/buddies')
+      .set('Authorization', `Bearer ${owner.accessToken}`)
+      .send({ email: 'pal-new@tambo.app' });
+    expect(again.status).toBe(409);
+    expect(again.body.code).toBe('buddy_exists');
+    expect(
+      await Buddy.countDocuments({ owner: owner.userId, status: 'active' }),
+    ).toBe(1);
   });
 });

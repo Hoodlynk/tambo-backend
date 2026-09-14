@@ -1,6 +1,7 @@
 import User from '../models/user.model';
 import type { UserPlan } from '../models/user.model';
 import { AppError } from '../utils/appError';
+import * as audit from './audit.service';
 import { effectivePlan, entitlementsFor } from './entitlements';
 import type { Entitlements } from './entitlements';
 
@@ -44,5 +45,9 @@ export const setPlan = async (
       : { $set: { plan }, $unset: { planExpiresAt: 1 } };
   const user = await User.findByIdAndUpdate(userId, update, { new: true });
   if (!user) throw AppError.notFound('User not found.', 'user_not_found');
+  // billing disputes ask "who set this plan, when" - the ledger answers
+  audit.record(userId, 'plan_changed', {
+    meta: { plan, expiresAt: expiresAt?.toISOString() ?? null },
+  });
   return toView(user);
 };

@@ -136,6 +136,13 @@ Invitations to an email that is not yet a Tambo account **auto-bind** the moment
 that person registers with it (email ownership proven by the signup OTP) and
 then appear in their buddy-invites.
 
+## Removal caveat
+
+Deleting a device removes its (resolved) episodes; the evidence envelopes age
+out on their normal TTL and past packs can no longer be rebuilt. If an
+insurer dispute may still need an old incident, export the pack (JSON + PDF)
+before removing the device. An archival redesign is on the roadmap.
+
 ## Error code index (additions)
 
 | Code | Status |

@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import config from '../src/config/config';
+import AuthEvent from '../src/models/authEvent.model';
 import Buddy from '../src/models/buddy.model';
+import BurnedFamily from '../src/models/burnedFamily.model';
 import Device from '../src/models/device.model';
 import EvidenceEnvelope from '../src/models/evidenceEnvelope.model';
 import LegalAcceptance from '../src/models/legalAcceptance.model';
@@ -59,6 +61,8 @@ const removePreviousSeed = async (): Promise<void> => {
     LegalAcceptance.deleteMany({ user: userId }),
     RefreshToken.deleteMany({ user: userId }),
     PushToken.deleteMany({ user: userId }),
+    AuthEvent.deleteMany({ user: userId }),
+    BurnedFamily.deleteMany({ user: userId }),
   ]);
   await User.deleteOne({ _id: userId });
 };

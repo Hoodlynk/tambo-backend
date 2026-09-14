@@ -5,6 +5,7 @@ import RefreshToken from '../models/refreshToken.model';
 import User from '../models/user.model';
 import type { IUser } from '../models/user.model';
 import { AppError } from '../utils/appError';
+import PushToken from '../models/pushToken.model';
 import * as audit from './audit.service';
 import {
   generateOpaqueToken,
@@ -227,6 +228,11 @@ export const revokeAllForUser = async (userId: string): Promise<void> => {
     { user: userId, revokedAt: { $exists: false } },
     { $set: { revokedAt: new Date() } },
   );
+  // push registrations are session-adjacent capability: a stolen session
+  // evicted here must not keep receiving this account's theft alerts. The
+  // owner's own devices re-register on next app start (the documented
+  // contract), so the cost is one silent gap, not lost protection.
+  await PushToken.deleteMany({ user: userId });
   audit.record(userId, 'sessions_revoked_all');
 };
 

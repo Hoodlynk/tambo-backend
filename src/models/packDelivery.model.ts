@@ -17,6 +17,10 @@ export type DeliveryChannel = (typeof DELIVERY_CHANNELS)[number];
  *   more evidence arrives), and the earliest first_alert row is the
  *   "first-alert time" the pack's incident summary reports.
  *
+ * No TTL, deliberately: this is the delivery AUDIT ledger ("who was told
+ * what, when" - the kind of question an insurer dispute asks years later),
+ * rows are tiny, and volume is bounded by the packSend rate limit.
+ *
  * `recipient` is an email address on the email channel and a user id on the
  * push channel; `channel` is part of the first-alert uniqueness, so each
  * human gets at most one first alert PER CHANNEL per episode and the two

@@ -140,13 +140,21 @@ describe('classifyMovement', () => {
         { ...AWAY, accuracyM: 10 },
       ]),
     ).toBe('moving');
-    // and with ONLY coarse fixes there is no reliable basis to classify
+    // GPS-denied theft posture: ONLY coarse fixes, but displacement far
+    // beyond their combined error is still decisive movement (~10km >> 4km)
+    expect(
+      classifyMovement([
+        { ...CBD, accuracyM: 2000 },
+        { lat: -1.38, lng: 36.9, accuracyM: 2000 },
+      ]),
+    ).toBe('moving');
+    // coarse fixes clustered within their own error: static, as before
     expect(
       classifyMovement([
         { ...CBD, accuracyM: 2000 },
         { ...AWAY, accuracyM: 2000 },
       ]),
-    ).toBe('unknown');
+    ).toBe('static');
   });
 });
 
@@ -370,6 +378,25 @@ describe('GET /episodes/:id/trail', () => {
     const res = await getTrail(scene.accessToken, episodeId);
     expect(res.body.trail.movement).toBe('moving');
     expect(res.body.trail.leftFamiliar).toBeNull();
+  });
+
+  it('still reports leaving home when the trail ENDS at a different familiar place', async () => {
+    const scene = await enrol();
+    await addFamiliar(scene.accessToken, { label: 'home', ...CBD });
+    await addFamiliar(scene.accessToken, { label: 'gym', ...AWAY });
+    const episodeId = await markStolen(scene.accessToken, scene.deviceId);
+
+    // home -> far away -> ends inside "gym": the phone still LEFT home
+    await ingestOne(scene.ingestToken, envelope('TRAIL_POINT', CBD));
+    await ingestOne(
+      scene.ingestToken,
+      envelope('TRAIL_POINT', { lat: -1.38, lng: 36.9 }),
+    );
+    await ingestOne(scene.ingestToken, envelope('TRAIL_POINT', AWAY));
+
+    const res = await getTrail(scene.accessToken, episodeId);
+    expect(res.body.trail.movement).toBe('moving');
+    expect(res.body.trail.leftFamiliar).toMatchObject({ label: 'home' });
   });
 
   it('never reports a departure for a static trail (boundary wobble is not a theft cue)', async () => {

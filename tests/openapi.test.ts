@@ -47,6 +47,22 @@ describe('the document', () => {
   });
 });
 
+describe('generated document behavior', () => {
+  it('injects the implicit 400 validation_error on param-only endpoints', () => {
+    const doc = buildOpenApiDocument() as {
+      paths: Record<
+        string,
+        Record<string, { responses: Record<string, { description: string }> }>
+      >;
+    };
+    // GET /devices/{id} declares no 400 in the registry; the generator must
+    // add it (strict 24-hex param -> validation_error is reachable)
+    const op = doc.paths['/api/v1/devices/{id}']!.get!;
+    expect(op.responses['400']).toBeDefined();
+    expect(op.responses['400']!.description).toContain('validation_error');
+  });
+});
+
 describe('spec ↔ server drift', () => {
   /**
    * Every registered path must resolve to a REAL Express route: probing it

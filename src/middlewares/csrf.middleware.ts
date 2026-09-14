@@ -24,7 +24,14 @@ export const CSRF_HEADER = 'x-tambo-csrf';
  *  definition and must work with an empty CORS allowlist. */
 const selfOrigin = (): string | null => {
   try {
-    return new URL(config.publicApiUrl).origin;
+    const url = new URL(config.publicApiUrl);
+    // the config default is http://localhost:<port>; in production an
+    // unset API_PUBLIC_URL must not quietly whitelist a localhost Origin
+    // (any local page on the victim's machine). Real deployments are https.
+    if (config.nodeEnv === 'production' && url.protocol !== 'https:') {
+      return null;
+    }
+    return url.origin;
   } catch {
     return null;
   }
