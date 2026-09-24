@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import config from './config/config';
 import authRoutes from './routes/auth.routes';
 import healthRoutes from './routes/health.routes';
+import alertActionRoutes from './routes/v1/alertAction.routes';
+import protectingRoutes from './routes/v1/protecting.routes';
 import buddyRoutes from './routes/v1/buddy.routes';
 import buddyInviteRoutes from './routes/v1/buddyInvite.routes';
 import deviceRoutes from './routes/v1/device.routes';
@@ -70,6 +72,8 @@ app.use('/api/v1/evidence', evidenceRoutes);
 app.use('/api/v1/episodes', episodeRoutes);
 app.use('/api/v1/buddies', buddyRoutes);
 app.use('/api/v1/buddy-invites', buddyInviteRoutes);
+app.use('/api/v1/protecting', protectingRoutes);
+app.use('/api/v1/alert-actions', alertActionRoutes);
 
 // --- Tail: unmatched routes, then the global error handler -----------------
 app.use(notFoundHandler);

@@ -73,7 +73,9 @@ export const renderPackPdf = async (pack: EvidencePack): Promise<Buffer> => {
     'Protection triggered',
     pack.episode.openedBy === 'device'
       ? 'Automatically: repeated failed unlock attempts crossed the threshold'
-      : 'By the owner (marked stolen from another device)',
+      : pack.episode.openedBy === 'buddy'
+        ? "By one of the owner's accepted Tambo buddies, on the owner's behalf"
+        : 'By the owner (marked stolen from another device)',
   );
   line('Opened at', pack.episode.openedAt);
   if (pack.episode.firstAlertAt)
@@ -91,7 +93,7 @@ export const renderPackPdf = async (pack: EvidencePack): Promise<Buffer> => {
     'Device',
     `${pack.device.make} ${pack.device.model} ("${pack.device.name}")`,
   );
-  line('IMEI(s)', pack.device.imeis.join(', '));
+  line('IMEI(s)', pack.device.imeis.join(', ') || 'Not provided by the owner');
   if (pack.device.colour) line('Colour', pack.device.colour);
   if (pack.device.purchaseInfo) line('Purchase info', pack.device.purchaseInfo);
   doc

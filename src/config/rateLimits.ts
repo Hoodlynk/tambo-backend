@@ -35,4 +35,10 @@ export const rateLimits = {
   mediaUpload: { limit: 60, windowSeconds: 60 * 60 },
   /** Full-pack emails fan out to several mailboxes. Keyed on IP. */
   packSend: { limit: 10, windowSeconds: 60 * 60 },
+  /** Check-ins run every 15 minutes; this leaves room for retries. Per device. */
+  heartbeat: { limit: 30, windowSeconds: 60 * 60 },
+  /** The public mark-stolen link in the quiet alert email. Keyed on IP. */
+  alertAction: { limit: 20, windowSeconds: 60 * 60 },
+  /** A buddy reporting a friend's phone stolen fans out alerts. Keyed on IP. */
+  buddyReport: { limit: 5, windowSeconds: 60 * 60 },
 } satisfies Record<string, RateLimitRule>;

@@ -100,6 +100,29 @@ an hourly sweep deletes expired files, because the TTL monitor cannot cascade
 into GridFS. The regulator asks to see the job - the index and the sweep ARE
 the job.
 
+## POST /evidence/heartbeat
+
+The phone's periodic "still here" (every 15 minutes) when it has nothing to
+upload. No body. `200 { ok: true, episodeId? }`. Every ingest batch also
+counts as contact; together they stamp the device's `lastSeenAt`, which the
+quiet-device watch reads (see devices-api.md).
+
+## STATUS events the server reads
+
+`STATUS` payloads are opaque evidence, except these shapes, which drive the
+quiet-device watch's suspicion marker (applied in device order within a
+batch; duplicates never re-apply):
+
+| payload | effect |
+|---|---|
+| `{"event":"BOOT","locked":true}` | raises it (booted, still on the lock screen) |
+| `{"event":"UNLOCK_SUCCEEDED"}` | clears it (the owner got in) |
+| `{"event":"BOOT","locked":false}`, `ADMIN_ENABLED`, `ADMIN_DISABLED` | recorded only |
+
+Every `UNLOCK_FAILED` also raises it. The phone sends `UNLOCK_SUCCEEDED` only
+to close a suspicious run - ordinary unlocks are never uploaded.
+
 ## Rate limits
 
-Keyed per device: 240 envelope batches/hour, 60 media uploads/hour.
+Keyed per device: 240 envelope batches/hour, 60 media uploads/hour, 30
+heartbeats/hour.

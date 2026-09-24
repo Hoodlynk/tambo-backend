@@ -68,10 +68,17 @@ export const sendFirstAlert = async (
   const owner = await User.findById(episode.user);
   if (!owner) return;
 
+  const reporter =
+    episode.openedBy === 'buddy' && episode.reportedBy
+      ? await User.findById(episode.reportedBy)
+      : null;
+
   const trigger =
     episode.openedBy === 'device'
       ? 'repeated failed unlock attempts were detected on'
-      : 'the owner marked';
+      : episode.openedBy === 'buddy'
+        ? `${reporter?.name ?? 'one of their buddies'} (a Tambo buddy) reported`
+        : 'the owner marked';
 
   const when = episode.openedAt.toISOString();
   const subject = `Tambo alert: ${device.name} may be stolen`;

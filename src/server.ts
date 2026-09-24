@@ -2,6 +2,7 @@ import app from './app';
 import config from './config/config';
 import connectDB from './config/database';
 import { sweepExpiredMedia } from './services/evidence.service';
+import { sweepQuietDevices } from './services/watchdog.service';
 
 connectDB()
   .then(() => {
@@ -17,6 +18,14 @@ connectDB()
         console.error('Media retention sweep failed:', error);
       });
     }, HOURLY).unref();
+
+    // The "went quiet" watchdog: owners hear about a phone that stopped
+    // checking in (airplane mode, power-off) - see watchdog.service.
+    setInterval(() => {
+      sweepQuietDevices().catch((error) => {
+        console.error('Quiet-device sweep failed:', error);
+      });
+    }, config.watchdog.sweepIntervalSeconds * 1000).unref();
   })
   .catch((err) => {
     console.error('Failed to start server:', err);

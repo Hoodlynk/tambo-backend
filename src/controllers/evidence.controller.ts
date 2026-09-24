@@ -16,6 +16,12 @@ export const ingest = async (req: Request, res: Response): Promise<void> => {
   res.status(200).json(result);
 };
 
+/** The phone's periodic "still here" when it has nothing to upload. */
+export const heartbeat = async (req: Request, res: Response): Promise<void> => {
+  const result = await evidenceService.heartbeat(deviceContext(req));
+  res.status(200).json({ ok: true, ...result });
+};
+
 export const uploadMedia = async (
   req: Request,
   res: Response,

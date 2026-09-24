@@ -3,8 +3,8 @@ import * as deviceController from '../../controllers/device.controller';
 import { requireAuth } from '../../middlewares/auth.middleware';
 import { validate } from '../../middlewares/validate';
 import {
+  deviceEnrolSchema,
   deviceIdSchema,
-  deviceSchema,
   deviceUpdateSchema,
   markStolenSchema,
 } from '../../validation/device.schema';
@@ -17,7 +17,7 @@ router.use(requireAuth);
 
 router.post(
   '/',
-  validate({ body: deviceSchema }),
+  validate({ body: deviceEnrolSchema }),
   asyncHandler(deviceController.register),
 );
 router.get('/', asyncHandler(deviceController.list));

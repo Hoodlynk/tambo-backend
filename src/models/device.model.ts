@@ -34,6 +34,21 @@ export interface IDevice extends Document<Types.ObjectId> {
    */
   failedUnlockThreshold: number;
   ingestTokenHash?: string;
+  /**
+   * Random id the app generates once per install. Makes enrolment idempotent:
+   * signing in again on the same phone re-issues that device's token instead
+   * of enrolling a duplicate.
+   */
+  installId?: string;
+  /** Server time of the device's last upload or heartbeat. */
+  lastSeenAt?: Date;
+  /**
+   * Server time of the latest failed unlock or locked-screen boot that has
+   * not since been followed by a successful unlock. Arms the quiet alert.
+   */
+  suspiciousAt?: Date;
+  /** When the owner was last told this device went quiet (one per silence). */
+  quietAlertedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -47,7 +62,9 @@ const deviceSchema = new Schema<IDevice>(
       index: true,
     },
     name: { type: String, required: true, trim: true },
-    imeis: { type: [String], required: true },
+    // may start empty: the app enrols itself at sign-in, before the owner has
+    // typed IMEIs in (Android will not let it read them)
+    imeis: { type: [String], default: [] },
     make: { type: String, required: true, trim: true },
     deviceModel: { type: String, required: true, trim: true },
     colour: { type: String, trim: true },
@@ -60,6 +77,10 @@ const deviceSchema = new Schema<IDevice>(
       select: false,
       index: { unique: true, sparse: true },
     },
+    installId: { type: String, trim: true },
+    lastSeenAt: { type: Date },
+    suspiciousAt: { type: Date },
+    quietAlertedAt: { type: Date },
   },
   {
     timestamps: true,
@@ -72,6 +93,14 @@ const deviceSchema = new Schema<IDevice>(
     },
   },
 );
+
+// one device per (owner, install): re-enrolling the same phone converges
+deviceSchema.index(
+  { user: 1, installId: 1 },
+  { unique: true, partialFilterExpression: { installId: { $type: 'string' } } },
+);
+// the quiet-device sweep
+deviceSchema.index({ status: 1, lastSeenAt: 1 });
 
 export const Device = model<IDevice>('Device', deviceSchema);
 export default Device;

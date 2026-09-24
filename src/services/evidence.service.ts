@@ -1,5 +1,6 @@
 import type { Types } from 'mongoose';
 import config from '../config/config';
+import Device from '../models/device.model';
 import type { IDevice } from '../models/device.model';
 import EvidenceEnvelope from '../models/evidenceEnvelope.model';
 import type { IEvidenceEnvelope } from '../models/evidenceEnvelope.model';
@@ -100,12 +101,87 @@ const maybeOpenByThreshold = async (
   return episode;
 };
 
+/**
+ * STATUS payloads the watchdog reads. Everything else in a STATUS payload
+ * stays opaque evidence; a payload that is not this shape is simply ignored.
+ */
+const statusEvent = (
+  payload: string,
+): { event?: unknown; locked?: unknown } | null => {
+  try {
+    const parsed: unknown = JSON.parse(payload);
+    return parsed && typeof parsed === 'object'
+      ? (parsed as { event?: unknown; locked?: unknown })
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+type Suspicion = 'raised' | 'cleared' | 'unchanged';
+
+/**
+ * Walks this batch's newly stored envelopes in device order and returns where
+ * the suspicion ends up. A failed unlock or a boot that stayed on the lock
+ * screen raises it; a successful unlock (only ever sent to close a failed
+ * run) clears it - so the owner who mistypes and then gets in never trips
+ * the quiet alert, while a thief who never gets in does.
+ */
+const suspicionAfter = (stored: EnvelopeInput[]): Suspicion => {
+  let outcome: Suspicion = 'unchanged';
+  const ordered = [...stored].sort(
+    (a, b) => Date.parse(a.capturedAt) - Date.parse(b.capturedAt),
+  );
+
+  for (const input of ordered) {
+    if (input.type === 'UNLOCK_FAILED') {
+      outcome = 'raised';
+    } else if (input.type === 'STATUS') {
+      const status = statusEvent(input.payload);
+      if (status?.event === 'BOOT' && status.locked === true) {
+        outcome = 'raised';
+      } else if (status?.event === 'UNLOCK_SUCCEEDED') {
+        outcome = 'cleared';
+      }
+    }
+  }
+  return outcome;
+};
+
+/**
+ * Every contact from the device is a sign of life: stamp lastSeenAt, and
+ * apply this batch's effect on the suspicion marker.
+ */
+const recordContact = async (
+  device: IDevice,
+  suspicion: Suspicion = 'unchanged',
+): Promise<void> => {
+  const now = new Date();
+  const update: Record<string, unknown> = { $set: { lastSeenAt: now } };
+  if (suspicion === 'raised') {
+    (update.$set as Record<string, unknown>).suspiciousAt = now;
+  } else if (suspicion === 'cleared') {
+    update.$unset = { suspiciousAt: '' };
+  }
+  await Device.updateOne({ _id: device._id }, update);
+};
+
+/** A check-in with nothing to upload - keeps the quiet alert from firing. */
+export const heartbeat = async (
+  device: IDevice,
+): Promise<{ episodeId?: string }> => {
+  await recordContact(device);
+  const episode = await episodeService.findOpenForDevice(device._id);
+  return episode ? { episodeId: episode._id.toString() } : {};
+};
+
 export const ingestBatch = async (
   device: IDevice,
   envelopes: EnvelopeInput[],
 ): Promise<IngestResult> => {
   let openEpisode = await episodeService.findOpenForDevice(device._id);
   const results: EnvelopeAck[] = [];
+  const stored: EnvelopeInput[] = [];
   let sawUnlockFailure = false;
 
   for (const input of envelopes) {
@@ -134,6 +210,7 @@ export const ingestBatch = async (
       });
 
       if (input.type === 'UNLOCK_FAILED') sawUnlockFailure = true;
+      stored.push(input);
       results.push({ id: input.id, status: 'acked' });
     } catch (error) {
       if (!isDuplicateKeyError(error)) throw error;
@@ -154,6 +231,9 @@ export const ingestBatch = async (
       }
     }
   }
+
+  // duplicates were applied when they first landed; only new envelopes count
+  await recordContact(device, suspicionAfter(stored));
 
   if (!openEpisode && sawUnlockFailure) {
     openEpisode = await maybeOpenByThreshold(device);
