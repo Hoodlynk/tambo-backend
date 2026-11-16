@@ -71,6 +71,22 @@ interface Config {
     maxMediaBytes: number;
   };
   /**
+   * The "went quiet" watchdog: a phone that stops checking in is the one
+   * signal a thief who flips airplane mode or powers off cannot suppress.
+   */
+  watchdog: {
+    /** Silence after an unresolved failed unlock / locked boot that alerts the owner. */
+    quietAfterMinutes: number;
+    /** A suspicious signal older than this no longer arms the quiet alert. */
+    suspicionLookbackHours: number;
+    /** Plain silence (nothing suspicious seen) that alerts the owner. 0 disables. */
+    silentAfterHours: number;
+    /** How often the sweep runs. */
+    sweepIntervalSeconds: number;
+    /** Lifetime of the one-tap "mark stolen" link in the alert email. */
+    actionLinkTtlHours: number;
+  };
+  /**
    * Public base URL of THIS API, used to build links a browser opens (e.g.
    * buddy-invite links). Distinct from mail.appUrl, which is the
    * mobile deep-link scheme.
@@ -427,6 +443,15 @@ const config: Config = {
     maxPayloadChars: Number(process.env.EVIDENCE_MAX_PAYLOAD_CHARS) || 8000,
     maxMediaBytes:
       Number(process.env.EVIDENCE_MAX_MEDIA_BYTES) || 8 * 1024 * 1024,
+  },
+  watchdog: {
+    quietAfterMinutes: Number(process.env.QUIET_AFTER_MINUTES) || 30,
+    suspicionLookbackHours:
+      Number(process.env.QUIET_SUSPICION_LOOKBACK_HOURS) || 24,
+    // `?? 24` rather than `|| 24` so an explicit 0 can switch the tier off
+    silentAfterHours: Number(process.env.SILENT_AFTER_HOURS ?? 24),
+    sweepIntervalSeconds: Number(process.env.QUIET_SWEEP_SECONDS) || 60,
+    actionLinkTtlHours: Number(process.env.ALERT_ACTION_TTL_HOURS) || 72,
   },
   publicApiUrl:
     process.env.API_PUBLIC_URL ||

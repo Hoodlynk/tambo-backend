@@ -127,7 +127,7 @@ const deviceEssentials = (
 ): string =>
   [
     `Device: ${device.make} ${device.deviceModel} ("${device.name}")`,
-    `IMEI${device.imeis.length > 1 ? 's' : ''}: ${device.imeis.join(', ')}`,
+    `IMEI${device.imeis.length > 1 ? 's' : ''}: ${device.imeis.join(', ') || 'not provided by the owner'}`,
     known
       ? `Last known location: ${known.location.lat}, ${known.location.lng}` +
         (known.location.accuracyM ? ` (±${known.location.accuracyM}m)` : '') +
@@ -200,10 +200,17 @@ export const sendFirstAlert = async (
   const owner = await User.findById(episode.user);
   if (!owner) return;
 
+  const reporter =
+    episode.openedBy === 'buddy' && episode.reportedBy
+      ? await User.findById(episode.reportedBy)
+      : null;
+
   const trigger =
     episode.openedBy === 'device'
       ? 'was flagged as possibly stolen after repeated failed unlock attempts'
-      : `was marked as possibly stolen by ${owner.name}`;
+      : episode.openedBy === 'buddy'
+        ? `was reported as possibly stolen by ${reporter?.name ?? 'one of their buddies'} (a Tambo buddy)`
+        : `was marked as possibly stolen by ${owner.name}`;
 
   const when = episode.openedAt.toISOString();
   const subject = `Tambo alert: ${device.name} may be stolen`;

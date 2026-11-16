@@ -35,7 +35,12 @@ X-Device-Token: <the ingest token>
 
 The owner obtains it once at enrolment (`POST /api/v1/devices`, an authenticated
 *user* call) and the response returns `ingestToken` **exactly once** — store it
-on the phone (Keystore-wrapped, per the Evidence doc). It is scoped to evidence
+on the phone. The Android app keeps it in **device-protected** storage, not
+Keystore-wrapped as the Evidence doc first suggested: the upload that matters
+most runs before the first unlock after a reboot, when credential-encrypted
+storage is unreadable and Keystore availability varies by OEM. Send
+`installId` at enrolment so re-enrolling re-issues the token on the same
+device instead of creating another (devices-api.md). It is scoped to evidence
 ingest only: it keeps working even if the owner's login sessions are revoked (a
 stolen phone must keep uploading), and it is useless for anything but ingest if
 it leaks. If compromised, the owner rotates it (`POST /api/v1/devices/:id/token`)

@@ -19,6 +19,8 @@ export interface EnrolledDevice {
   device: IDevice;
   /** Shown exactly once; only its hash is stored. */
   ingestToken: string;
+  /** False when an installId matched an existing device (token re-issued). */
+  created: boolean;
 }
 
 /**
@@ -34,11 +36,49 @@ export const getOwned = async (
   return device;
 };
 
-/** Enrols a device and issues its ingest token in one step. */
+/**
+ * Re-enrolment of a known install: the phone lost its token (sign-out,
+ * reinstall, revoked) and is asking for a new one. The old token dies here.
+ * Owner-edited fields (name, IMEIs, threshold) are left alone - the app's
+ * auto-generated values must not overwrite what the owner typed.
+ */
+const reissueForInstall = async (
+  userId: string,
+  installId: string,
+): Promise<EnrolledDevice | null> => {
+  const ingestToken = generateOpaqueToken();
+  const device = await Device.findOneAndUpdate(
+    { user: userId, installId },
+    // enrolling is the phone speaking: count it as contact, or a device that
+    // was signed out for days would trip the quiet alert before its first
+    // check-in
+    {
+      $set: {
+        ingestTokenHash: hashOpaqueToken(ingestToken),
+        lastSeenAt: new Date(),
+      },
+    },
+    { new: true },
+  );
+  return device ? { device, ingestToken, created: false } : null;
+};
+
+/**
+ * Enrols a device and issues its ingest token in one step. With an
+ * installId the call is idempotent per (owner, install), so the app can
+ * safely enrol on every sign-in.
+ */
 export const register = async (
   userId: string,
   input: DeviceInput,
 ): Promise<EnrolledDevice> => {
+  // a known install re-enrolling adds no device, so it is settled before the
+  // plan cap: signing back in on an enrolled phone must never hit device_limit
+  if (input.installId) {
+    const existing = await reissueForInstall(userId, input.installId);
+    if (existing) return existing;
+  }
+
   // the plan bounds ENROLMENT only: already-enrolled devices keep protecting
   // and reporting even if the plan later lapses - never brick mid-theft
   const [owner, enrolled] = await Promise.all([
@@ -61,22 +101,37 @@ export const register = async (
 
   const ingestToken = generateOpaqueToken();
 
-  const device = await Device.create({
-    user: userId,
-    name: input.name,
-    imeis: input.imeis,
-    make: input.make,
-    deviceModel: input.deviceModel,
-    ...(input.colour ? { colour: input.colour } : {}),
-    ...(input.purchaseInfo ? { purchaseInfo: input.purchaseInfo } : {}),
-    ...(input.failedUnlockThreshold
-      ? { failedUnlockThreshold: input.failedUnlockThreshold }
-      : {}),
-    ingestTokenHash: hashOpaqueToken(ingestToken),
-    ...(partner ? { partner } : {}),
-  });
+  try {
+    const device = await Device.create({
+      user: userId,
+      name: input.name,
+      imeis: input.imeis ?? [],
+      make: input.make,
+      deviceModel: input.deviceModel,
+      ...(input.colour ? { colour: input.colour } : {}),
+      ...(input.purchaseInfo ? { purchaseInfo: input.purchaseInfo } : {}),
+      ...(input.failedUnlockThreshold
+        ? { failedUnlockThreshold: input.failedUnlockThreshold }
+        : {}),
+      // only self-enrolment (from the phone itself) is contact; an owner
+      // registering a phone from elsewhere says nothing about it being alive
+      ...(input.installId
+        ? { installId: input.installId, lastSeenAt: new Date() }
+        : {}),
+      ingestTokenHash: hashOpaqueToken(ingestToken),
+      ...(partner ? { partner } : {}),
+    });
 
-  return { device, ingestToken };
+    return { device, ingestToken, created: true };
+  } catch (error) {
+    // two concurrent enrolments of one install: the loser re-issues against
+    // the winner's device rather than failing the sign-in
+    if (input.installId && isDuplicateKeyError(error)) {
+      const existing = await reissueForInstall(userId, input.installId);
+      if (existing) return existing;
+    }
+    throw error;
+  }
 };
 
 export const list = (userId: string): Promise<IDevice[]> =>

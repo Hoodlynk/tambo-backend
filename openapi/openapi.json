@@ -2561,7 +2561,7 @@
           "Devices"
         ],
         "summary": "Enrol a device (returns its one-shot ingest token)",
-        "description": "Gated on current T&C + privacy acceptance. The ingestToken appears in this response and never again - only its hash is stored. The device joins `partnerCode`'s fleet, or the owner's partner when omitted.",
+        "description": "Gated on current T&C + privacy acceptance. The ingestToken appears in this response and never again - only its hash is stored. The device joins `partnerCode`'s fleet, or the owner's partner when omitted. With an `installId` the call is idempotent per (owner, install): the app may enrol on every sign-in, and a known install gets a fresh token for its existing device (the old token stops working).",
         "requestBody": {
           "required": true,
           "content": {
@@ -2610,11 +2610,14 @@
                   },
                   "partnerCode": {
                     "type": "string"
+                  },
+                  "installId": {
+                    "type": "string",
+                    "pattern": "^[\\w-]{8,64}$"
                   }
                 },
                 "required": [
                   "name",
-                  "imeis",
                   "make",
                   "deviceModel"
                 ]
@@ -2623,6 +2626,129 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "Known installId: token re-issued for the same device.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "device": {
+                      "type": "object",
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "user": {
+                          "description": "Absent on a provisioned phone nobody has linked yet.",
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "imeis": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "make": {
+                          "type": "string"
+                        },
+                        "deviceModel": {
+                          "type": "string"
+                        },
+                        "colour": {
+                          "type": "string"
+                        },
+                        "purchaseInfo": {
+                          "type": "string"
+                        },
+                        "failedUnlockThreshold": {
+                          "type": "number"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "stolen"
+                          ]
+                        },
+                        "partner": {
+                          "description": "The partner fleet the phone was enrolled under.",
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "serial": {
+                          "description": "Partner-supplied hardware serial.",
+                          "type": "string"
+                        },
+                        "provisionedAt": {
+                          "description": "Set when a partner provisioned the phone.",
+                          "type": "string"
+                        },
+                        "claimedAt": {
+                          "description": "When the provisioned phone claimed its ingest token.",
+                          "type": "string"
+                        },
+                        "linkedAt": {
+                          "description": "When a person linked the provisioned phone to their account.",
+                          "type": "string"
+                        },
+                        "installId": {
+                          "description": "The app install that enrolled the phone, when it sent one.",
+                          "type": "string"
+                        },
+                        "lastSeenAt": {
+                          "description": "Server time of the last upload or heartbeat.",
+                          "type": "string"
+                        },
+                        "suspiciousAt": {
+                          "description": "Latest failed unlock or locked-screen boot not yet followed by a successful unlock; arms the \"went quiet\" alert.",
+                          "type": "string"
+                        },
+                        "quietAlertedAt": {
+                          "description": "When the owner was last told the phone went quiet.",
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        }
+                      },
+                      "required": [
+                        "_id",
+                        "name",
+                        "imeis",
+                        "make",
+                        "deviceModel",
+                        "failedUnlockThreshold",
+                        "status",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": {}
+                    },
+                    "ingestToken": {
+                      "type": "string",
+                      "description": "Shown ONCE; only its hash is stored. Send as X-Device-Token."
+                    }
+                  },
+                  "required": [
+                    "device",
+                    "ingestToken"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
           "201": {
             "description": "Enrolled.",
             "content": {
@@ -2692,6 +2818,22 @@
                         },
                         "linkedAt": {
                           "description": "When a person linked the provisioned phone to their account.",
+                          "type": "string"
+                        },
+                        "installId": {
+                          "description": "The app install that enrolled the phone, when it sent one.",
+                          "type": "string"
+                        },
+                        "lastSeenAt": {
+                          "description": "Server time of the last upload or heartbeat.",
+                          "type": "string"
+                        },
+                        "suspiciousAt": {
+                          "description": "Latest failed unlock or locked-screen boot not yet followed by a successful unlock; arms the \"went quiet\" alert.",
+                          "type": "string"
+                        },
+                        "quietAlertedAt": {
+                          "description": "When the owner was last told the phone went quiet.",
                           "type": "string"
                         },
                         "createdAt": {
@@ -2856,6 +2998,22 @@
                             "description": "When a person linked the provisioned phone to their account.",
                             "type": "string"
                           },
+                          "installId": {
+                            "description": "The app install that enrolled the phone, when it sent one.",
+                            "type": "string"
+                          },
+                          "lastSeenAt": {
+                            "description": "Server time of the last upload or heartbeat.",
+                            "type": "string"
+                          },
+                          "suspiciousAt": {
+                            "description": "Latest failed unlock or locked-screen boot not yet followed by a successful unlock; arms the \"went quiet\" alert.",
+                            "type": "string"
+                          },
+                          "quietAlertedAt": {
+                            "description": "When the owner was last told the phone went quiet.",
+                            "type": "string"
+                          },
                           "createdAt": {
                             "type": "string",
                             "description": "ISO-8601 timestamp"
@@ -3015,6 +3173,22 @@
                           "description": "When a person linked the provisioned phone to their account.",
                           "type": "string"
                         },
+                        "installId": {
+                          "description": "The app install that enrolled the phone, when it sent one.",
+                          "type": "string"
+                        },
+                        "lastSeenAt": {
+                          "description": "Server time of the last upload or heartbeat.",
+                          "type": "string"
+                        },
+                        "suspiciousAt": {
+                          "description": "Latest failed unlock or locked-screen boot not yet followed by a successful unlock; arms the \"went quiet\" alert.",
+                          "type": "string"
+                        },
+                        "quietAlertedAt": {
+                          "description": "When the owner was last told the phone went quiet.",
+                          "type": "string"
+                        },
                         "createdAt": {
                           "type": "string",
                           "description": "ISO-8601 timestamp"
@@ -3120,6 +3294,22 @@
                         },
                         "linkedAt": {
                           "description": "When a person linked the provisioned phone to their account.",
+                          "type": "string"
+                        },
+                        "installId": {
+                          "description": "The app install that enrolled the phone, when it sent one.",
+                          "type": "string"
+                        },
+                        "lastSeenAt": {
+                          "description": "Server time of the last upload or heartbeat.",
+                          "type": "string"
+                        },
+                        "suspiciousAt": {
+                          "description": "Latest failed unlock or locked-screen boot not yet followed by a successful unlock; arms the \"went quiet\" alert.",
+                          "type": "string"
+                        },
+                        "quietAlertedAt": {
+                          "description": "When the owner was last told the phone went quiet.",
                           "type": "string"
                         },
                         "createdAt": {
@@ -3328,6 +3518,22 @@
                           "description": "When a person linked the provisioned phone to their account.",
                           "type": "string"
                         },
+                        "installId": {
+                          "description": "The app install that enrolled the phone, when it sent one.",
+                          "type": "string"
+                        },
+                        "lastSeenAt": {
+                          "description": "Server time of the last upload or heartbeat.",
+                          "type": "string"
+                        },
+                        "suspiciousAt": {
+                          "description": "Latest failed unlock or locked-screen boot not yet followed by a successful unlock; arms the \"went quiet\" alert.",
+                          "type": "string"
+                        },
+                        "quietAlertedAt": {
+                          "description": "When the owner was last told the phone went quiet.",
+                          "type": "string"
+                        },
                         "createdAt": {
                           "type": "string",
                           "description": "ISO-8601 timestamp"
@@ -3514,6 +3720,22 @@
                         },
                         "linkedAt": {
                           "description": "When a person linked the provisioned phone to their account.",
+                          "type": "string"
+                        },
+                        "installId": {
+                          "description": "The app install that enrolled the phone, when it sent one.",
+                          "type": "string"
+                        },
+                        "lastSeenAt": {
+                          "description": "Server time of the last upload or heartbeat.",
+                          "type": "string"
+                        },
+                        "suspiciousAt": {
+                          "description": "Latest failed unlock or locked-screen boot not yet followed by a successful unlock; arms the \"went quiet\" alert.",
+                          "type": "string"
+                        },
+                        "quietAlertedAt": {
+                          "description": "When the owner was last told the phone went quiet.",
                           "type": "string"
                         },
                         "createdAt": {
@@ -3721,6 +3943,22 @@
                         },
                         "linkedAt": {
                           "description": "When a person linked the provisioned phone to their account.",
+                          "type": "string"
+                        },
+                        "installId": {
+                          "description": "The app install that enrolled the phone, when it sent one.",
+                          "type": "string"
+                        },
+                        "lastSeenAt": {
+                          "description": "Server time of the last upload or heartbeat.",
+                          "type": "string"
+                        },
+                        "suspiciousAt": {
+                          "description": "Latest failed unlock or locked-screen boot not yet followed by a successful unlock; arms the \"went quiet\" alert.",
+                          "type": "string"
+                        },
+                        "quietAlertedAt": {
+                          "description": "When the owner was last told the phone went quiet.",
                           "type": "string"
                         },
                         "createdAt": {
@@ -4140,7 +4378,8 @@
                               "type": "string",
                               "enum": [
                                 "owner",
-                                "device"
+                                "device",
+                                "buddy"
                               ]
                             },
                             "snapshotBursts": {
@@ -4455,7 +4694,8 @@
                           "type": "string",
                           "enum": [
                             "owner",
-                            "device"
+                            "device",
+                            "buddy"
                           ]
                         },
                         "openedAt": {
@@ -4471,6 +4711,11 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "reportedBy": {
+                          "description": "The buddy who reported it, when openedBy is 'buddy'.",
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
                         }
                       },
                       "required": [
@@ -4525,7 +4770,8 @@
                           "type": "string",
                           "enum": [
                             "owner",
-                            "device"
+                            "device",
+                            "buddy"
                           ]
                         },
                         "openedAt": {
@@ -4541,6 +4787,11 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "reportedBy": {
+                          "description": "The buddy who reported it, when openedBy is 'buddy'.",
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
                         }
                       },
                       "required": [
@@ -4651,7 +4902,8 @@
                           "type": "string",
                           "enum": [
                             "owner",
-                            "device"
+                            "device",
+                            "buddy"
                           ]
                         },
                         "openedAt": {
@@ -4667,6 +4919,11 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "reportedBy": {
+                          "description": "The buddy who reported it, when openedBy is 'buddy'.",
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
                         }
                       },
                       "required": [
@@ -5495,7 +5752,8 @@
                             "type": "string",
                             "enum": [
                               "owner",
-                              "device"
+                              "device",
+                              "buddy"
                             ]
                           },
                           "openedAt": {
@@ -5511,6 +5769,11 @@
                           },
                           "note": {
                             "type": "string"
+                          },
+                          "reportedBy": {
+                            "description": "The buddy who reported it, when openedBy is 'buddy'.",
+                            "type": "string",
+                            "pattern": "^[a-f\\d]{24}$"
                           }
                         },
                         "required": [
@@ -5612,7 +5875,8 @@
                           "type": "string",
                           "enum": [
                             "owner",
-                            "device"
+                            "device",
+                            "buddy"
                           ]
                         },
                         "openedAt": {
@@ -5628,6 +5892,11 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "reportedBy": {
+                          "description": "The buddy who reported it, when openedBy is 'buddy'.",
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
                         }
                       },
                       "required": [
@@ -7023,6 +7292,80 @@
         ]
       }
     },
+    "/api/v1/evidence/heartbeat": {
+      "post": {
+        "tags": [
+          "Evidence"
+        ],
+        "summary": "The phone checks in when it has nothing to upload",
+        "description": "Authenticates as a DEVICE via X-Device-Token; no body. Every upload already counts as contact, so call this only on the idle timer (about every 15 minutes). A phone that stops checking in triggers the \"went quiet\" email to its owner.",
+        "parameters": [
+          {
+            "name": "X-Device-Token",
+            "in": "header",
+            "required": true,
+            "description": "The one-shot ingest token issued at device registration.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "episodeId": {
+                      "description": "Present while a theft episode is open for this device.",
+                      "type": "string",
+                      "pattern": "^[a-f\\d]{24}$"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_device_token` — Revoked or unknown X-Device-Token (code \"missing_device_token\" when absent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "deviceToken": []
+          }
+        ]
+      }
+    },
     "/api/v1/evidence/commands": {
       "get": {
         "tags": [
@@ -7687,6 +8030,390 @@
             "bearerAuth": []
           }
         ]
+      }
+    },
+    "/api/v1/protecting": {
+      "get": {
+        "tags": [
+          "Buddies"
+        ],
+        "summary": "The people I am an accepted buddy for, with their devices",
+        "description": "Identity and status only: no IMEIs, no check-in times. Feeds the \"report stolen for a friend\" screen.",
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "people": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "owner": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^[a-f\\d]{24}$"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "devices": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "pattern": "^[a-f\\d]{24}$"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "make": {
+                                  "type": "string"
+                                },
+                                "deviceModel": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "active",
+                                    "stolen"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name",
+                                "make",
+                                "deviceModel",
+                                "status"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "owner",
+                          "devices"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "people"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/protecting/devices/{id}/report-stolen": {
+      "post": {
+        "tags": [
+          "Buddies"
+        ],
+        "summary": "An accepted buddy reports the owner's phone stolen",
+        "description": "For the owner whose only phone is the stolen one. Needs an ACTIVE buddy link to the device owner; any other device answers 404 like an unknown id. Alerts go out exactly as for an owner report.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Converged on the already-open episode.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "episode": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "open",
+                            "resolved"
+                          ]
+                        },
+                        "openedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status",
+                        "openedAt"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Proof it worked, not the owner's incident record."
+                    }
+                  },
+                  "required": [
+                    "episode"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "This call opened the episode.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "episode": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "open",
+                            "resolved"
+                          ]
+                        },
+                        "openedAt": {
+                          "type": "string",
+                          "description": "ISO-8601 timestamp"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status",
+                        "openedAt"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Proof it worked, not the owner's incident record."
+                    }
+                  },
+                  "required": [
+                    "episode"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`device_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/alert-actions/{token}": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Confirmation page for the one-tap link in a \"went quiet\" email",
+        "description": "PUBLIC and opened in a browser, never by the app: the emailed token is the credential. Read-only, because mail scanners pre-fetch links. Always 200 with an HTML page, including for a dead link.",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{96}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An HTML page: the confirm form, or \"link expired\".",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      },
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Spend the one-tap link: mark the device stolen",
+        "description": "PUBLIC; submitted by the form on the confirmation page. Single-use: opens (or converges on) the theft episode and alerts the buddies. Always 200 with an HTML page, including for a dead link.",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{96}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An HTML page: marked stolen, already stolen, or expired.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`rate_limited` — Budget exhausted; retry after retryAfter seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
       }
     },
     "/api/v1/buddy-invites": {
@@ -9783,7 +10510,8 @@
                           "type": "string",
                           "enum": [
                             "owner",
-                            "device"
+                            "device",
+                            "buddy"
                           ]
                         },
                         "openedAt": {
@@ -9799,6 +10527,11 @@
                         },
                         "note": {
                           "type": "string"
+                        },
+                        "reportedBy": {
+                          "description": "The buddy who reported it, when openedBy is 'buddy'.",
+                          "type": "string",
+                          "pattern": "^[a-f\\d]{24}$"
                         }
                       },
                       "required": [

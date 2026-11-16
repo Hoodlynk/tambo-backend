@@ -1,7 +1,7 @@
 # Build plan & status
 
 The single source of truth for where the backend is and what comes next.
-Last updated: 2026-11-15.
+Last updated: 2026-11-16.
 
 **Active program (approved 2026-11-13)**: [program-2026-11.md](program-2026-11.md),
 backend sessions B1 snapshots (✅) → B2 remote commands (✅) → B3 partner tenancy +
@@ -10,6 +10,33 @@ enrolment (✅) → B5 partner webhooks + status cards (✅). **Next: the app re
 for iOS (M0-M6, run in that repo).** Scoping records:
 [oem-zero-screen-readiness.md](oem-zero-screen-readiness.md),
 [white-label-scoping.md](white-label-scoping.md).
+
+### ✅ Merged from the remote: quiet-device watchdog and buddy reports (2026-11-16)
+Kevin's two commits (2026-09-12, 2026-09-24) are merged into the B1-B5 line.
+- **Kept from the remote:** the "went quiet" watchdog (owner emailed when a
+  phone stops checking in, after a suspicious signal or after plain silence),
+  the single-use mark-stolen link in that email (`GET/POST
+  /alert-actions/:token`, HTML pages), `POST /evidence/heartbeat`, idempotent
+  self-enrolment by `installId` with optional IMEIs, `GET /protecting` and
+  `POST /protecting/devices/:id/report-stolen` (episodes gain `openedBy:
+  buddy` and `reportedBy`).
+- **Kept from local instead:** the remote's OTP-verification commit. Local
+  already gates registration on the emailed code and has `POST
+  /auth/verify-email`; the remote's `403 email_unverified` login answer is
+  not in the API.
+- **Adapted to the current rules:** all five new endpoints are in the OpenAPI
+  registry; the watchdog sends through the notifier and logs through pino;
+  it skips partner phones nobody has linked; a known install re-enrolling is
+  settled before the plan's device cap; a buddy cannot report an ownerless
+  phone.
+
+479 tests (+31). Contracts: [devices-api.md](devices-api.md),
+[evidence-api.md](evidence-api.md).
+
+**Open, filed here instead of TODOs:** push (not only email) for the quiet
+alert; whether the watchdog should also notify a partner's recipients for
+unlinked fleet phones; the app must send `installId`, the heartbeat and the
+`BOOT` / `UNLOCK_SUCCEEDED` status events before any of this is live.
 
 ### ✅ B5: partner webhooks and status cards (2026-11-15)
 - **Webhooks.** Partners manage their own endpoints with their API key:

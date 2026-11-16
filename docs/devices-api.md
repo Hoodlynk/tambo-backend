@@ -26,6 +26,16 @@ the device's evidence-upload credential (header `X-Device-Token`, F-B): valid
 even after the owner's sessions are revoked, and useless for anything but
 ingest if it leaks.
 
+**Self-enrolment.** The app enrols the phone it runs on at every sign-in, so
+two fields make that safe:
+
+- `imeis` is optional (the app cannot read them; the owner adds them later
+  via PATCH). A list that *is* sent must still hold 1-2 IMEIs.
+- `installId` (8-64 url-safe chars, stable per phone) makes the call
+  idempotent per (owner, install): a known install answers **`200`** with the
+  same device and a **fresh token** (the old one dies). Owner-edited fields
+  (name, IMEIs, threshold) are never overwritten by a re-enrolment.
+  Self-enrolment counts as contact for the quiet-device watch (below).
 ### Partner-provisioned phones (B4)
 A phone can also arrive **without an owner**. A partner provisions it, the
 phone claims its own ingest token (`POST /devices/claim`), and a person
@@ -111,6 +121,30 @@ S2.3: time-to-first-alert is the metric that matters emotionally). Exactly
 once per recipient per episode, enforced by a database claim, so converging
 openers can never double-alert. The full pack follows via send-pack.
 
+### Quiet-device alerts (automatic, owner only)
+The answer to a thief who flips airplane mode or powers the phone off: a
+sweep (every `QUIET_SWEEP_SECONDS`, default 60) emails the **owner** when an
+enrolled phone with a live token stops checking in:
+
+- **after a suspicious event** — a failed unlock or a boot left on the lock
+  screen that no successful unlock has cleared, then `QUIET_AFTER_MINUTES`
+  (default 30) of silence;
+- **plain silence** — `SILENT_AFTER_HOURS` (default 24; `0` disables) with no
+  contact at all.
+
+At most one email per silence; it re-arms once the phone is heard from. Buddies
+are not emailed: silence alone is too weak a signal. The email carries a
+one-tap link (below) that marks the phone stolen, and THAT alerts them.
+Stolen devices, and devices whose token was revoked (signed out), are not
+watched.
+
+### GET · POST /alert-actions/:token (public, browser)
+The link in a quiet alert. `GET` renders a confirmation page and changes
+nothing (mail scanners pre-fetch links); `POST` spends the single-use token
+and opens an episode exactly like the owner's mark-stolen, so first alerts go
+to the buddies. Valid for `ALERT_ACTION_TTL_HOURS` (default 72). Pages are HTML
+and always `200`; a dead link gets a page saying so. Rate-limited (20/hour/IP).
+
 ## Buddies (people who receive alerts)
 
 A buddy is a **Tambo user** the owner links to their account to receive theft
@@ -150,6 +184,20 @@ Invitations to an email that is not yet a Tambo account **auto-bind** the moment
 that person registers with it (email ownership proven by the signup OTP) and
 then appear in their buddy-invites.
 
+### People I protect (buddy side of an accepted link)
+
+For the owner whose only phone is the stolen one: a buddy can report it.
+
+**GET /protecting** 🔒 - owners who have the caller as an **active** buddy,
+with their devices: `{ people: [{ owner: { id, name }, devices: [{ id, name,
+make, deviceModel, status }] }] }`. No IMEIs, no check-in times.
+
+**POST /protecting/devices/:id/report-stolen** 🔒 - `{ note? }`. Opens the
+episode with `openedBy: "buddy"` and `reportedBy`, and first alerts go out as
+for any other opener (the owner's email names the reporting buddy). `201`
+opened / `200` already open. Only an ACTIVE link authorizes it; any other
+device id is `404 device_not_found`, indistinguishable from an unknown one.
+Rate-limited (5/hour).
 ## Remote commands (B2)
 
 While an episode is open the owner can ask the phone to snapshot, locate or

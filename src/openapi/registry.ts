@@ -22,6 +22,7 @@ import {
   commandParamsSchema,
 } from '../validation/command.schema';
 import {
+  alertActionTokenSchema,
   deviceIdSchema,
   deviceSchema,
   deviceUpdateSchema,
@@ -643,13 +644,21 @@ export const endpoints: Endpoint[] = [
     description:
       'Gated on current T&C + privacy acceptance. The ingestToken appears in ' +
       'this response and never again - only its hash is stored. The device ' +
-      "joins `partnerCode`'s fleet, or the owner's partner when omitted.",
+      "joins `partnerCode`'s fleet, or the owner's partner when omitted. " +
+      'With an `installId` the call is idempotent per (owner, install): the ' +
+      'app may enrol on every sign-in, and a known install gets a fresh ' +
+      'token for its existing device (the old token stops working).',
     auth: 'bearer',
     request: { body: deviceSchema },
     responses: [
       {
         status: 201,
         description: 'Enrolled.',
+        schema: r.deviceWithTokenResponse,
+      },
+      {
+        status: 200,
+        description: 'Known installId: token re-issued for the same device.',
         schema: r.deviceWithTokenResponse,
       },
     ],
@@ -1226,6 +1235,23 @@ export const endpoints: Endpoint[] = [
   },
 
   {
+    method: 'post',
+    path: '/api/v1/evidence/heartbeat',
+    tag: 'Evidence',
+    summary: 'The phone checks in when it has nothing to upload',
+    description:
+      'Authenticates as a DEVICE via X-Device-Token; no body. Every upload ' +
+      'already counts as contact, so call this only on the idle timer ' +
+      '(about every 15 minutes). A phone that stops checking in triggers ' +
+      'the "went quiet" email to its owner.',
+    auth: 'device',
+    request: { headers: [deviceTokenHeader] },
+    responses: [
+      { status: 200, description: 'OK.', schema: r.heartbeatResponse },
+    ],
+    errors: [deviceUnauthorized, rateLimited],
+  },
+  {
     method: 'get',
     path: '/api/v1/evidence/commands',
     tag: 'Commands',
@@ -1337,6 +1363,88 @@ export const endpoints: Endpoint[] = [
     request: { params: buddyIdSchema },
     responses: [{ status: 204, description: 'Removed.' }],
     errors: [unauthorized, { status: 404, code: 'buddy_not_found' }],
+  },
+  {
+    method: 'get',
+    path: '/api/v1/protecting',
+    tag: 'Buddies',
+    summary: 'The people I am an accepted buddy for, with their devices',
+    description:
+      'Identity and status only: no IMEIs, no check-in times. Feeds the ' +
+      '"report stolen for a friend" screen.',
+    auth: 'bearer',
+    responses: [
+      { status: 200, description: 'OK.', schema: r.protectedResponse },
+    ],
+    errors: [unauthorized],
+  },
+  {
+    method: 'post',
+    path: '/api/v1/protecting/devices/{id}/report-stolen',
+    tag: 'Buddies',
+    summary: "An accepted buddy reports the owner's phone stolen",
+    description:
+      'For the owner whose only phone is the stolen one. Needs an ACTIVE ' +
+      'buddy link to the device owner; any other device answers 404 like an ' +
+      'unknown id. Alerts go out exactly as for an owner report.',
+    auth: 'bearer',
+    request: { params: deviceIdSchema, body: markStolenSchema },
+    responses: [
+      {
+        status: 201,
+        description: 'This call opened the episode.',
+        schema: r.buddyReportResponse,
+      },
+      {
+        status: 200,
+        description: 'Converged on the already-open episode.',
+        schema: r.buddyReportResponse,
+      },
+    ],
+    errors: [
+      unauthorized,
+      validationError,
+      rateLimited,
+      { status: 404, code: 'device_not_found' },
+    ],
+  },
+  {
+    method: 'get',
+    path: '/api/v1/alert-actions/{token}',
+    tag: 'Devices',
+    summary: 'Confirmation page for the one-tap link in a "went quiet" email',
+    description:
+      'PUBLIC and opened in a browser, never by the app: the emailed token ' +
+      'is the credential. Read-only, because mail scanners pre-fetch links. ' +
+      'Always 200 with an HTML page, including for a dead link.',
+    request: { params: alertActionTokenSchema },
+    responses: [
+      {
+        status: 200,
+        description: 'An HTML page: the confirm form, or "link expired".',
+        contentType: 'text/html',
+      },
+    ],
+    errors: [validationError, rateLimited],
+  },
+  {
+    method: 'post',
+    path: '/api/v1/alert-actions/{token}',
+    tag: 'Devices',
+    summary: 'Spend the one-tap link: mark the device stolen',
+    description:
+      'PUBLIC; submitted by the form on the confirmation page. Single-use: ' +
+      'opens (or converges on) the theft episode and alerts the buddies. ' +
+      'Always 200 with an HTML page, including for a dead link.',
+    request: { params: alertActionTokenSchema },
+    responses: [
+      {
+        status: 200,
+        description: 'An HTML page: marked stolen, already stolen, or expired.',
+        contentType: 'text/html',
+      },
+    ],
+    errors: [validationError, rateLimited],
   },
   {
     method: 'get',

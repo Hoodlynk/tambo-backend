@@ -15,10 +15,23 @@ export const imei = z
 export const deviceName = z.string().trim().min(1, 'Name is required.').max(80);
 export const shortText = z.string().trim().min(1).max(80);
 
+const installId = z
+  .string()
+  .trim()
+  .regex(/^[\w-]{8,64}$/, 'installId must be 8-64 url-safe characters.');
+
 const deviceFields = z.object({
   /** What the owner calls it: "My Tecno", "Mum's phone". */
   name: deviceName,
-  imeis: z.array(imei).min(1, 'At least one IMEI is required.').max(2),
+  /**
+   * Optional at enrolment - the app enrols itself at sign-in and the owner
+   * adds IMEIs later - but a list that IS sent must hold at least one.
+   */
+  imeis: z
+    .array(imei)
+    .min(1, 'At least one IMEI is required.')
+    .max(2)
+    .optional(),
   make: shortText,
   deviceModel: shortText,
   colour: shortText.optional(),
@@ -32,6 +45,11 @@ export const deviceSchema = deviceFields.extend({
    * fixed at enrolment, so it is not part of the update shape.
    */
   partnerCode: partnerCode.optional(),
+  /**
+   * Random id the app generates once per install. Makes enrolment idempotent
+   * per (owner, install); not something an update may change.
+   */
+  installId: installId.optional(),
 });
 
 export const deviceUpdateSchema = deviceFields
@@ -47,6 +65,11 @@ export const deviceIdSchema = z.object({
 
 export const markStolenSchema = z.object({
   note: z.string().trim().min(1).max(1000).optional(),
+});
+
+/** generateOpaqueToken(): 48 random bytes as hex. */
+export const alertActionTokenSchema = z.object({
+  token: z.string().regex(/^[a-f\d]{96}$/, 'Invalid link.'),
 });
 
 export const episodeIdSchema = z.object({

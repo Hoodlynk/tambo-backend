@@ -9,12 +9,15 @@ import type {
 } from '../validation/device.schema';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
-  const { device, ingestToken } = await deviceService.register(
+  const { device, ingestToken, created } = await deviceService.register(
     authContext(req).userId,
     req.body as DeviceInput,
   );
-  // the token appears in this response and never again - only its hash is stored
-  res.status(201).json({ device: device.toJSON(), ingestToken });
+  // the token appears in this response and never again - only its hash is
+  // stored. 200 when a known install was re-enrolled (token re-issued).
+  res
+    .status(created ? 201 : 200)
+    .json({ device: device.toJSON(), ingestToken });
 };
 
 export const list = async (req: Request, res: Response): Promise<void> => {

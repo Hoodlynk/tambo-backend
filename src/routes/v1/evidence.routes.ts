@@ -34,6 +34,17 @@ router.post(
   asyncHandler(evidenceController.ingest),
 );
 
+// no body; registered before '/:envelopeId/media' only for readability - the
+// paths cannot collide (that one needs a second segment)
+router.post(
+  '/heartbeat',
+  rateLimit({
+    name: 'heartbeat',
+    subject: (req) => req.device?._id.toString() ?? '',
+  }),
+  asyncHandler(evidenceController.heartbeat),
+);
+
 router.post(
   '/:envelopeId/media',
   // accept whatever content-type the camera produced; the cap is the guard

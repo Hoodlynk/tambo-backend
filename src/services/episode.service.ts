@@ -1,3 +1,5 @@
+import type { Types } from 'mongoose';
+import Buddy from '../models/buddy.model';
 import Device from '../models/device.model';
 import type { IDevice } from '../models/device.model';
 import TheftEpisode from '../models/theftEpisode.model';
@@ -26,6 +28,7 @@ export const openEpisode = async (
   device: IDevice,
   openedBy: EpisodeOpener,
   note?: string,
+  reportedBy?: Types.ObjectId | string,
 ): Promise<{ episode: ITheftEpisode; created: boolean }> => {
   const existing = await TheftEpisode.findOne({
     device: device._id,
@@ -40,6 +43,7 @@ export const openEpisode = async (
       openedBy,
       openedAt: new Date(),
       ...(note ? { note } : {}),
+      ...(reportedBy ? { reportedBy } : {}),
     });
 
     await Device.updateOne({ _id: device._id }, { $set: { status: 'stolen' } });
@@ -69,7 +73,7 @@ export const openEpisode = async (
 
 /** The device's open episode, if any - evidence ingest attaches to it. */
 export const findOpenForDevice = (
-  deviceId: import('mongoose').Types.ObjectId,
+  deviceId: Types.ObjectId,
 ): Promise<ITheftEpisode | null> =>
   TheftEpisode.findOne({ device: deviceId, status: 'open' }).exec();
 
@@ -81,6 +85,32 @@ export const markStolen = async (
 ): Promise<{ episode: ITheftEpisode; created: boolean }> => {
   const device = await deviceService.getOwned(userId, deviceId);
   return openEpisode(device, 'owner', note);
+};
+
+/**
+ * An accepted buddy reports the owner's phone stolen - for the owner whose
+ * only phone IS the stolen one. Only an ACTIVE link authorizes it; a device
+ * the caller has no link to 404s exactly like an unknown id, so device ids
+ * cannot be probed through this route.
+ */
+export const reportStolenAsBuddy = async (
+  buddyUserId: string,
+  deviceId: string,
+  note?: string,
+): Promise<{ episode: ITheftEpisode; created: boolean }> => {
+  const device = await Device.findById(deviceId);
+  // an unlinked partner phone has no owner, so nobody can be its buddy
+  const linked =
+    device?.user &&
+    (await Buddy.exists({
+      owner: device.user,
+      buddy: buddyUserId,
+      status: 'active',
+    }));
+  if (!device || !linked) {
+    throw AppError.notFound('Device not found.', 'device_not_found');
+  }
+  return openEpisode(device, 'buddy', note, buddyUserId);
 };
 
 /**
@@ -110,7 +140,15 @@ export const resolveRecovered = async (
     );
   }
 
-  await Device.updateOne({ _id: device._id }, { $set: { status: 'active' } });
+  // back in hand: whatever armed the quiet alert belongs to the incident that
+  // just closed, so the watchdog starts clean
+  await Device.updateOne(
+    { _id: device._id },
+    {
+      $set: { status: 'active' },
+      $unset: { suspiciousAt: '', quietAlertedAt: '' },
+    },
+  );
   await deviceCommandService.cancelForEpisode(episode._id);
   partnerEvents.episodeResolved(device, episode);
   return episode;

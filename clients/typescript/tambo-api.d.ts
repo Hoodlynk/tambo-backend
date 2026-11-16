@@ -1824,6 +1824,14 @@ export interface paths {
                                 claimedAt?: string;
                                 /** @description When a person linked the provisioned phone to their account. */
                                 linkedAt?: string;
+                                /** @description The app install that enrolled the phone, when it sent one. */
+                                installId?: string;
+                                /** @description Server time of the last upload or heartbeat. */
+                                lastSeenAt?: string;
+                                /** @description Latest failed unlock or locked-screen boot not yet followed by a successful unlock; arms the "went quiet" alert. */
+                                suspiciousAt?: string;
+                                /** @description When the owner was last told the phone went quiet. */
+                                quietAlertedAt?: string;
                                 /** @description ISO-8601 timestamp */
                                 createdAt: string;
                                 /** @description ISO-8601 timestamp */
@@ -1848,7 +1856,7 @@ export interface paths {
         put?: never;
         /**
          * Enrol a device (returns its one-shot ingest token)
-         * @description Gated on current T&C + privacy acceptance. The ingestToken appears in this response and never again - only its hash is stored. The device joins `partnerCode`'s fleet, or the owner's partner when omitted.
+         * @description Gated on current T&C + privacy acceptance. The ingestToken appears in this response and never again - only its hash is stored. The device joins `partnerCode`'s fleet, or the owner's partner when omitted. With an `installId` the call is idempotent per (owner, install): the app may enrol on every sign-in, and a known install gets a fresh token for its existing device (the old token stops working).
          */
         post: {
             parameters: {
@@ -1861,17 +1869,68 @@ export interface paths {
                 content: {
                     "application/json": {
                         name: string;
-                        imeis: string[];
+                        imeis?: string[];
                         make: string;
                         deviceModel: string;
                         colour?: string;
                         purchaseInfo?: string;
                         failedUnlockThreshold?: number;
                         partnerCode?: string;
+                        installId?: string;
                     };
                 };
             };
             responses: {
+                /** @description Known installId: token re-issued for the same device. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            device: {
+                                _id: string;
+                                /** @description Absent on a provisioned phone nobody has linked yet. */
+                                user?: string;
+                                name: string;
+                                imeis: string[];
+                                make: string;
+                                deviceModel: string;
+                                colour?: string;
+                                purchaseInfo?: string;
+                                failedUnlockThreshold: number;
+                                /** @enum {string} */
+                                status: "active" | "stolen";
+                                /** @description The partner fleet the phone was enrolled under. */
+                                partner?: string;
+                                /** @description Partner-supplied hardware serial. */
+                                serial?: string;
+                                /** @description Set when a partner provisioned the phone. */
+                                provisionedAt?: string;
+                                /** @description When the provisioned phone claimed its ingest token. */
+                                claimedAt?: string;
+                                /** @description When a person linked the provisioned phone to their account. */
+                                linkedAt?: string;
+                                /** @description The app install that enrolled the phone, when it sent one. */
+                                installId?: string;
+                                /** @description Server time of the last upload or heartbeat. */
+                                lastSeenAt?: string;
+                                /** @description Latest failed unlock or locked-screen boot not yet followed by a successful unlock; arms the "went quiet" alert. */
+                                suspiciousAt?: string;
+                                /** @description When the owner was last told the phone went quiet. */
+                                quietAlertedAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                                /** @description ISO-8601 timestamp */
+                                updatedAt: string;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                            /** @description Shown ONCE; only its hash is stored. Send as X-Device-Token. */
+                            ingestToken: string;
+                        };
+                    };
+                };
                 /** @description Enrolled. */
                 201: {
                     headers: {
@@ -1902,6 +1961,14 @@ export interface paths {
                                 claimedAt?: string;
                                 /** @description When a person linked the provisioned phone to their account. */
                                 linkedAt?: string;
+                                /** @description The app install that enrolled the phone, when it sent one. */
+                                installId?: string;
+                                /** @description Server time of the last upload or heartbeat. */
+                                lastSeenAt?: string;
+                                /** @description Latest failed unlock or locked-screen boot not yet followed by a successful unlock; arms the "went quiet" alert. */
+                                suspiciousAt?: string;
+                                /** @description When the owner was last told the phone went quiet. */
+                                quietAlertedAt?: string;
                                 /** @description ISO-8601 timestamp */
                                 createdAt: string;
                                 /** @description ISO-8601 timestamp */
@@ -2018,6 +2085,14 @@ export interface paths {
                                 claimedAt?: string;
                                 /** @description When a person linked the provisioned phone to their account. */
                                 linkedAt?: string;
+                                /** @description The app install that enrolled the phone, when it sent one. */
+                                installId?: string;
+                                /** @description Server time of the last upload or heartbeat. */
+                                lastSeenAt?: string;
+                                /** @description Latest failed unlock or locked-screen boot not yet followed by a successful unlock; arms the "went quiet" alert. */
+                                suspiciousAt?: string;
+                                /** @description When the owner was last told the phone went quiet. */
+                                quietAlertedAt?: string;
                                 /** @description ISO-8601 timestamp */
                                 createdAt: string;
                                 /** @description ISO-8601 timestamp */
@@ -2060,6 +2135,14 @@ export interface paths {
                                 claimedAt?: string;
                                 /** @description When a person linked the provisioned phone to their account. */
                                 linkedAt?: string;
+                                /** @description The app install that enrolled the phone, when it sent one. */
+                                installId?: string;
+                                /** @description Server time of the last upload or heartbeat. */
+                                lastSeenAt?: string;
+                                /** @description Latest failed unlock or locked-screen boot not yet followed by a successful unlock; arms the "went quiet" alert. */
+                                suspiciousAt?: string;
+                                /** @description When the owner was last told the phone went quiet. */
+                                quietAlertedAt?: string;
                                 /** @description ISO-8601 timestamp */
                                 createdAt: string;
                                 /** @description ISO-8601 timestamp */
@@ -2188,6 +2271,14 @@ export interface paths {
                                 claimedAt?: string;
                                 /** @description When a person linked the provisioned phone to their account. */
                                 linkedAt?: string;
+                                /** @description The app install that enrolled the phone, when it sent one. */
+                                installId?: string;
+                                /** @description Server time of the last upload or heartbeat. */
+                                lastSeenAt?: string;
+                                /** @description Latest failed unlock or locked-screen boot not yet followed by a successful unlock; arms the "went quiet" alert. */
+                                suspiciousAt?: string;
+                                /** @description When the owner was last told the phone went quiet. */
+                                quietAlertedAt?: string;
                                 /** @description ISO-8601 timestamp */
                                 createdAt: string;
                                 /** @description ISO-8601 timestamp */
@@ -2309,6 +2400,14 @@ export interface paths {
                                 claimedAt?: string;
                                 /** @description When a person linked the provisioned phone to their account. */
                                 linkedAt?: string;
+                                /** @description The app install that enrolled the phone, when it sent one. */
+                                installId?: string;
+                                /** @description Server time of the last upload or heartbeat. */
+                                lastSeenAt?: string;
+                                /** @description Latest failed unlock or locked-screen boot not yet followed by a successful unlock; arms the "went quiet" alert. */
+                                suspiciousAt?: string;
+                                /** @description When the owner was last told the phone went quiet. */
+                                quietAlertedAt?: string;
                                 /** @description ISO-8601 timestamp */
                                 createdAt: string;
                                 /** @description ISO-8601 timestamp */
@@ -2463,6 +2562,14 @@ export interface paths {
                                 claimedAt?: string;
                                 /** @description When a person linked the provisioned phone to their account. */
                                 linkedAt?: string;
+                                /** @description The app install that enrolled the phone, when it sent one. */
+                                installId?: string;
+                                /** @description Server time of the last upload or heartbeat. */
+                                lastSeenAt?: string;
+                                /** @description Latest failed unlock or locked-screen boot not yet followed by a successful unlock; arms the "went quiet" alert. */
+                                suspiciousAt?: string;
+                                /** @description When the owner was last told the phone went quiet. */
+                                quietAlertedAt?: string;
                                 /** @description ISO-8601 timestamp */
                                 createdAt: string;
                                 /** @description ISO-8601 timestamp */
@@ -2651,7 +2758,7 @@ export interface paths {
                                     /** @description ISO-8601 timestamp */
                                     openedAt: string;
                                     /** @enum {string} */
-                                    openedBy: "owner" | "device";
+                                    openedBy: "owner" | "device" | "buddy";
                                     snapshotBursts: number;
                                     pendingCommands: number;
                                     /** @description Only from evidence around this episode. */
@@ -2863,13 +2970,15 @@ export interface paths {
                                 /** @enum {string} */
                                 status: "open" | "resolved";
                                 /** @enum {string} */
-                                openedBy: "owner" | "device";
+                                openedBy: "owner" | "device" | "buddy";
                                 /** @description ISO-8601 timestamp */
                                 openedAt: string;
                                 /** @description ISO-8601 timestamp */
                                 resolvedAt?: string;
                                 resolution?: string;
                                 note?: string;
+                                /** @description The buddy who reported it, when openedBy is 'buddy'. */
+                                reportedBy?: string;
                             } & {
                                 [key: string]: unknown;
                             };
@@ -2891,13 +3000,15 @@ export interface paths {
                                 /** @enum {string} */
                                 status: "open" | "resolved";
                                 /** @enum {string} */
-                                openedBy: "owner" | "device";
+                                openedBy: "owner" | "device" | "buddy";
                                 /** @description ISO-8601 timestamp */
                                 openedAt: string;
                                 /** @description ISO-8601 timestamp */
                                 resolvedAt?: string;
                                 resolution?: string;
                                 note?: string;
+                                /** @description The buddy who reported it, when openedBy is 'buddy'. */
+                                reportedBy?: string;
                             } & {
                                 [key: string]: unknown;
                             };
@@ -2975,13 +3086,15 @@ export interface paths {
                                 /** @enum {string} */
                                 status: "open" | "resolved";
                                 /** @enum {string} */
-                                openedBy: "owner" | "device";
+                                openedBy: "owner" | "device" | "buddy";
                                 /** @description ISO-8601 timestamp */
                                 openedAt: string;
                                 /** @description ISO-8601 timestamp */
                                 resolvedAt?: string;
                                 resolution?: string;
                                 note?: string;
+                                /** @description The buddy who reported it, when openedBy is 'buddy'. */
+                                reportedBy?: string;
                             } & {
                                 [key: string]: unknown;
                             };
@@ -3438,13 +3551,15 @@ export interface paths {
                                 /** @enum {string} */
                                 status: "open" | "resolved";
                                 /** @enum {string} */
-                                openedBy: "owner" | "device";
+                                openedBy: "owner" | "device" | "buddy";
                                 /** @description ISO-8601 timestamp */
                                 openedAt: string;
                                 /** @description ISO-8601 timestamp */
                                 resolvedAt?: string;
                                 resolution?: string;
                                 note?: string;
+                                /** @description The buddy who reported it, when openedBy is 'buddy'. */
+                                reportedBy?: string;
                             } & {
                                 [key: string]: unknown;
                             })[];
@@ -3513,13 +3628,15 @@ export interface paths {
                                 /** @enum {string} */
                                 status: "open" | "resolved";
                                 /** @enum {string} */
-                                openedBy: "owner" | "device";
+                                openedBy: "owner" | "device" | "buddy";
                                 /** @description ISO-8601 timestamp */
                                 openedAt: string;
                                 /** @description ISO-8601 timestamp */
                                 resolvedAt?: string;
                                 resolution?: string;
                                 note?: string;
+                                /** @description The buddy who reported it, when openedBy is 'buddy'. */
+                                reportedBy?: string;
                             } & {
                                 [key: string]: unknown;
                             };
@@ -4357,6 +4474,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/evidence/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The phone checks in when it has nothing to upload
+         * @description Authenticates as a DEVICE via X-Device-Token; no body. Every upload already counts as contact, so call this only on the idle timer (about every 15 minutes). A phone that stops checking in triggers the "went quiet" email to its owner.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The one-shot ingest token issued at device registration. */
+                    "X-Device-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {boolean} */
+                            ok: true;
+                            /** @description Present while a theft episode is open for this device. */
+                            episodeId?: string;
+                        };
+                    };
+                };
+                /** @description `invalid_device_token` — Revoked or unknown X-Device-Token (code "missing_device_token" when absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/evidence/commands": {
         parameters: {
             query?: never;
@@ -4803,6 +4985,281 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/protecting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The people I am an accepted buddy for, with their devices
+         * @description Identity and status only: no IMEIs, no check-in times. Feeds the "report stolen for a friend" screen.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            people: {
+                                owner: {
+                                    id: string;
+                                    name: string;
+                                };
+                                devices: {
+                                    id: string;
+                                    name: string;
+                                    make: string;
+                                    deviceModel: string;
+                                    /** @enum {string} */
+                                    status: "active" | "stolen";
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/protecting/devices/{id}/report-stolen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * An accepted buddy reports the owner's phone stolen
+         * @description For the owner whose only phone is the stolen one. Needs an ACTIVE buddy link to the device owner; any other device answers 404 like an unknown id. Alerts go out exactly as for an owner report.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        note?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Converged on the already-open episode. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Proof it worked, not the owner's incident record. */
+                            episode: {
+                                id: string;
+                                /** @enum {string} */
+                                status: "open" | "resolved";
+                                /** @description ISO-8601 timestamp */
+                                openedAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description This call opened the episode. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Proof it worked, not the owner's incident record. */
+                            episode: {
+                                id: string;
+                                /** @enum {string} */
+                                status: "open" | "resolved";
+                                /** @description ISO-8601 timestamp */
+                                openedAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `device_not_found` */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alert-actions/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Confirmation page for the one-tap link in a "went quiet" email
+         * @description PUBLIC and opened in a browser, never by the app: the emailed token is the credential. Read-only, because mail scanners pre-fetch links. Always 200 with an HTML page, including for a dead link.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description An HTML page: the confirm form, or "link expired". */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/html": string;
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Spend the one-tap link: mark the device stolen
+         * @description PUBLIC; submitted by the form on the confirmation page. Single-use: opens (or converges on) the theft episode and alerts the buddies. Always 200 with an HTML page, including for a dead link.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description An HTML page: marked stolen, already stolen, or expired. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/html": string;
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -6114,13 +6571,15 @@ export interface paths {
                                 /** @enum {string} */
                                 status: "open" | "resolved";
                                 /** @enum {string} */
-                                openedBy: "owner" | "device";
+                                openedBy: "owner" | "device" | "buddy";
                                 /** @description ISO-8601 timestamp */
                                 openedAt: string;
                                 /** @description ISO-8601 timestamp */
                                 resolvedAt?: string;
                                 resolution?: string;
                                 note?: string;
+                                /** @description The buddy who reported it, when openedBy is 'buddy'. */
+                                reportedBy?: string;
                             } & {
                                 [key: string]: unknown;
                             };

@@ -2,7 +2,7 @@ import { Schema, model } from 'mongoose';
 import type { Document, Types } from 'mongoose';
 
 export const EPISODE_STATUSES = ['open', 'resolved'] as const;
-export const EPISODE_OPENERS = ['owner', 'device'] as const;
+export const EPISODE_OPENERS = ['owner', 'device', 'buddy'] as const;
 export const EPISODE_RESOLUTIONS = ['recovered', 'closed'] as const;
 
 export type EpisodeStatus = (typeof EPISODE_STATUSES)[number];
@@ -13,9 +13,11 @@ export type EpisodeResolution = (typeof EPISODE_RESOLUTIONS)[number];
  * One theft incident - the unit every piece of evidence groups under (the
  * product docs' `trailId`), and the unit a report/claim is generated for.
  *
- * Opened either by the OWNER (mark-as-stolen from another device) or by the
- * DEVICE itself (failed-unlock threshold via evidence ingest, F-B) - unlock
- * detection must never be the only trigger (F1 deep-dive S4).
+ * Opened by the OWNER (mark-as-stolen from another device, or the one-tap
+ * link in a quiet alert), by the DEVICE itself (failed-unlock threshold via
+ * evidence ingest, F-B), or by an accepted BUDDY on the owner's behalf - the
+ * owner's only phone is often the stolen one. Unlock detection must never be
+ * the only trigger (F1 deep-dive S4).
  *
  * Episode state drives evidence retention: routine envelopes live 90 days,
  * an open episode's evidence is extended to 12 months (F-B).
@@ -35,6 +37,8 @@ export interface ITheftEpisode extends Document<Types.ObjectId> {
   resolution?: EpisodeResolution;
   /** Owner-supplied context ("snatched at Kencom stage ~18:30"). */
   note?: string;
+  /** The buddy who reported it, when openedBy is 'buddy'. */
+  reportedBy?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -49,6 +53,7 @@ const theftEpisodeSchema = new Schema<ITheftEpisode>(
     resolvedAt: { type: Date },
     resolution: { type: String, enum: EPISODE_RESOLUTIONS },
     note: { type: String, trim: true },
+    reportedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true, toJSON: { versionKey: false } },
 );

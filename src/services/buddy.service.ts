@@ -1,6 +1,7 @@
 import config from '../config/config';
 import Buddy from '../models/buddy.model';
 import type { IBuddy } from '../models/buddy.model';
+import Device from '../models/device.model';
 import User from '../models/user.model';
 import type { IUser } from '../models/user.model';
 import { AppError } from '../utils/appError';
@@ -242,6 +243,40 @@ export const bindPendingInvites = async (user: IUser): Promise<void> => {
     { inviteEmail: user.email, buddy: { $exists: false }, status: 'pending' },
     { $set: { buddy: user._id } },
   );
+};
+
+/**
+ * The people this user is an ACCEPTED buddy for, with their devices - what a
+ * buddy needs to report a friend's phone stolen when the friend cannot (their
+ * only phone is the stolen one). Deliberately thin: identity and status only,
+ * no IMEIs, no check-in times.
+ */
+export const listProtected = async (
+  userId: string,
+): Promise<Record<string, unknown>[]> => {
+  const links = await Buddy.find({ buddy: userId, status: 'active' })
+    .sort({ respondedAt: -1 })
+    .populate('owner');
+  const owners = links
+    .map((link) => link.owner as unknown as IUser | null)
+    .filter((owner): owner is IUser => Boolean(owner));
+
+  const devices = await Device.find({
+    user: { $in: owners.map((owner) => owner._id) },
+  }).sort({ createdAt: -1 });
+
+  return owners.map((owner) => ({
+    owner: { id: owner._id.toString(), name: owner.name },
+    devices: devices
+      .filter((device) => device.user?.equals(owner._id))
+      .map((device) => ({
+        id: device._id.toString(),
+        name: device.name,
+        make: device.make,
+        deviceModel: device.deviceModel,
+        status: device.status,
+      })),
+  }));
 };
 
 /** Emails of the owner's ACCEPTED buddies - the alert fan-out (delivery.service).

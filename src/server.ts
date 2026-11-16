@@ -4,6 +4,7 @@ import connectDB from './config/database';
 import { sweepExpiredMedia } from './services/evidence.service';
 import { dispatchDue } from './services/webhook.service';
 import { logger } from './utils/logger';
+import { sweepQuietDevices } from './services/watchdog.service';
 
 connectDB()
   .then(() => {
@@ -42,6 +43,13 @@ connectDB()
           dispatching = false;
         });
     }, 30 * 1000).unref();
+    // The "went quiet" watchdog: owners hear about a phone that stopped
+    // checking in (airplane mode, power-off) - see watchdog.service.
+    setInterval(() => {
+      sweepQuietDevices().catch((error) => {
+        logger.error({ err: error }, 'quiet-device sweep failed');
+      });
+    }, config.watchdog.sweepIntervalSeconds * 1000).unref();
   })
   .catch((err) => {
     logger.error({ err }, 'failed to start server');

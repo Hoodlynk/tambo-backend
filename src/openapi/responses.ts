@@ -163,6 +163,22 @@ export const device = z.looseObject({
   linkedAt: isoDate
     .optional()
     .describe('When a person linked the provisioned phone to their account.'),
+  installId: z
+    .string()
+    .optional()
+    .describe('The app install that enrolled the phone, when it sent one.'),
+  lastSeenAt: isoDate
+    .optional()
+    .describe('Server time of the last upload or heartbeat.'),
+  suspiciousAt: isoDate
+    .optional()
+    .describe(
+      'Latest failed unlock or locked-screen boot not yet followed by a ' +
+        'successful unlock; arms the "went quiet" alert.',
+    ),
+  quietAlertedAt: isoDate
+    .optional()
+    .describe('When the owner was last told the phone went quiet.'),
   createdAt: isoDate,
   updatedAt: isoDate,
 });
@@ -220,11 +236,14 @@ export const episode = z.looseObject({
     .describe('Absent while the device has no owner (partner-provisioned).'),
   device: objectId,
   status: z.enum(['open', 'resolved']),
-  openedBy: z.enum(['owner', 'device']),
+  openedBy: z.enum(['owner', 'device', 'buddy']),
   openedAt: isoDate,
   resolvedAt: isoDate.optional(),
   resolution: z.string().optional(),
   note: z.string().optional(),
+  reportedBy: objectId
+    .optional()
+    .describe("The buddy who reported it, when openedBy is 'buddy'."),
 });
 
 export const episodeResponse = z.object({ episode });
@@ -475,6 +494,40 @@ export const buddyCreatedResponse = z.object({
 });
 
 export const buddiesResponse = z.object({ buddies: z.array(buddyOwnerView) });
+
+export const protectedResponse = z.object({
+  people: z.array(
+    z.object({
+      owner: z.object({ id: objectId, name: z.string() }),
+      devices: z.array(
+        z.object({
+          id: objectId,
+          name: z.string(),
+          make: z.string(),
+          deviceModel: z.string(),
+          status: z.enum(['active', 'stolen']),
+        }),
+      ),
+    }),
+  ),
+});
+
+export const buddyReportResponse = z.object({
+  episode: z
+    .object({
+      id: objectId,
+      status: z.enum(['open', 'resolved']),
+      openedAt: isoDate,
+    })
+    .describe("Proof it worked, not the owner's incident record."),
+});
+
+export const heartbeatResponse = z.object({
+  ok: z.literal(true),
+  episodeId: objectId
+    .optional()
+    .describe('Present while a theft episode is open for this device.'),
+});
 
 export const invitesResponse = z.object({
   invites: z.array(
@@ -805,7 +858,7 @@ export const ownerStatusCardResponse = z.object({
       .object({
         id: objectId,
         openedAt: isoDate,
-        openedBy: z.enum(['owner', 'device']),
+        openedBy: z.enum(['owner', 'device', 'buddy']),
         snapshotBursts: z.number(),
         pendingCommands: z.number(),
         lastLocation: z

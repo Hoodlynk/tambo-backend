@@ -6,6 +6,8 @@ import authRoutes from './routes/auth.routes';
 import authWebRoutes from './routes/auth.web.routes';
 import healthRoutes from './routes/health.routes';
 import openapiRoutes from './routes/openapi.routes';
+import alertActionRoutes from './routes/v1/alertAction.routes';
+import protectingRoutes from './routes/v1/protecting.routes';
 import buddyRoutes from './routes/v1/buddy.routes';
 import adminPartnerRoutes from './routes/v1/adminPartner.routes';
 import buddyInviteRoutes from './routes/v1/buddyInvite.routes';
@@ -103,6 +105,8 @@ app.use('/api/v1/plan', planRoutes);
 app.use('/api/v1/client', clientRoutes);
 app.use('/api/v1/partner', partnerRoutes);
 app.use('/api/v1/admin/partners', adminPartnerRoutes);
+app.use('/api/v1/protecting', protectingRoutes);
+app.use('/api/v1/alert-actions', alertActionRoutes);
 
 // --- Tail: unmatched routes, then the global error handler -----------------
 app.use(notFoundHandler);
