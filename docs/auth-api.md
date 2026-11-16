@@ -53,8 +53,13 @@ session yet. Possession of the mailbox (the code) is what completes signup:
 and issues the first session.
 
 ```json
-{ "name": "Ada Lovelace", "email": "ada@tambo.app", "password": "8+ chars, at most 72 bytes" }
+{ "name": "Ada Lovelace", "email": "ada@tambo.app", "password": "8+ chars, at most 72 bytes",
+  "partnerCode": "acme" }
 ```
+
+`partnerCode` is optional. A white-label build sends it; the account joins
+that partner and receives the partner's default plan, if the partner has one
+([partners-api.md](partners-api.md)).
 
 `201` → a challenge, **not** tokens:
 
@@ -65,6 +70,7 @@ and issues the first session.
 | Code | Status | Meaning |
 |---|---|---|
 | `validation_error` | 400 | See `details` for the offending fields |
+| `unknown_partner` | 400 | `partnerCode` is unknown or the partner is suspended; nothing was written |
 | `email_taken` | 409 | A **verified** account owns this address (case-insensitive) |
 | `rate_limited` | 429 | 10 per hour per IP |
 
@@ -259,10 +265,16 @@ strings end up in access logs.
 ```json
 {
   "sessions": [
-    { "id": "665f...", "userAgent": "Tambo/1.0 (iOS 17)", "createdAt": "...", "expiresAt": "...", "current": true }
+    { "id": "665f...", "userAgent": "Tambo/1.0 (iOS 17)", "clientPlatform": "ios",
+      "clientVersion": "1.4.0", "createdAt": "...", "expiresAt": "...", "current": true }
   ]
 }
 ```
+
+`clientPlatform` and `clientVersion` come from the `X-Client-Platform` and
+`X-Client-Version` headers. Current clients send both on every request. The
+values are recorded at sign-in and updated on each refresh, and are `null`
+when the headers were never sent (see [partners-api.md](partners-api.md)).
 
 ## DELETE /sessions/:id 🔒
 

@@ -57,3 +57,22 @@ export const sendPush = (userId: string, content: PushContent): void => {
       logger.error({ err: error, userId }, 'failed to push-notify user');
     });
 };
+
+/**
+ * Silent wake-up for one enrolled device's installs (B2 remote commands).
+ * Fire-and-forget like every channel here; a phone with no device-scoped
+ * token still gets the command on its next poll or ingest reply.
+ */
+export const wakeDevice = (
+  deviceId: string,
+  data: Record<string, string>,
+): void => {
+  void (async () => {
+    const tokens = await pushTokenService.activeTokensForDevice(deviceId);
+    if (tokens.length === 0) return;
+    const result = await pusher.sendData({ tokens, data });
+    await pushTokenService.pruneTokens(result.invalidTokens);
+  })().catch((error) => {
+    logger.error({ err: error, deviceId }, 'failed to wake device');
+  });
+};

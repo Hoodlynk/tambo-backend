@@ -1,5 +1,7 @@
 import { Schema, model } from 'mongoose';
 import type { Document, Types } from 'mongoose';
+import { CLIENT_PLATFORMS } from '../config/client';
+import type { ClientPlatform } from '../config/client';
 
 /**
  * One row per issued refresh token. Tokens are opaque random strings; only
@@ -17,6 +19,9 @@ export interface IRefreshToken extends Document<Types.ObjectId> {
   expiresAt: Date;
   revokedAt?: Date;
   userAgent?: string;
+  /** From X-Client-Platform / X-Client-Version; refresh updates them. */
+  clientPlatform?: ClientPlatform;
+  clientVersion?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,6 +40,8 @@ const refreshTokenSchema = new Schema<IRefreshToken>(
     expiresAt: { type: Date, required: true, expires: 0 },
     revokedAt: { type: Date },
     userAgent: { type: String },
+    clientPlatform: { type: String, enum: CLIENT_PLATFORMS },
+    clientVersion: { type: String },
   },
   { timestamps: true },
 );

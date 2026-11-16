@@ -1,9 +1,13 @@
+import type { Types } from 'mongoose';
 import Device from '../models/device.model';
 import type { IDevice } from '../models/device.model';
+import DeviceCommand from '../models/deviceCommand.model';
 import TheftEpisode from '../models/theftEpisode.model';
 import User from '../models/user.model';
 import { AppError } from '../utils/appError';
 import { entitlementsFor } from './entitlements';
+import * as partnerService from './partner.service';
+import * as pushTokenService from './pushToken.service';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
 import { generateOpaqueToken, hashOpaqueToken } from '../utils/tokens';
 import type {
@@ -38,7 +42,7 @@ export const register = async (
   // the plan bounds ENROLMENT only: already-enrolled devices keep protecting
   // and reporting even if the plan later lapses - never brick mid-theft
   const [owner, enrolled] = await Promise.all([
-    User.findById(userId).select('plan planExpiresAt'),
+    User.findById(userId).select('plan planExpiresAt partner'),
     Device.countDocuments({ user: userId }),
   ]);
   if (!owner) throw AppError.unauthorized();
@@ -50,6 +54,10 @@ export const register = async (
       'device_limit',
     );
   }
+
+  const partner = input.partnerCode
+    ? (await partnerService.resolveForEnrolment(input.partnerCode))._id
+    : owner.partner;
 
   const ingestToken = generateOpaqueToken();
 
@@ -65,6 +73,7 @@ export const register = async (
       ? { failedUnlockThreshold: input.failedUnlockThreshold }
       : {}),
     ingestTokenHash: hashOpaqueToken(ingestToken),
+    ...(partner ? { partner } : {}),
   });
 
   return { device, ingestToken };
@@ -113,6 +122,9 @@ export const remove = async (
   }
 
   await TheftEpisode.deleteMany({ device: device._id });
+  await DeviceCommand.deleteMany({ device: device._id });
+  // the app install keeps the owner's alerts; it just stops being this device
+  await pushTokenService.detachDevice(device._id);
   await device.deleteOne();
 };
 
@@ -161,3 +173,12 @@ export const revokeIngestToken = async (
  */
 export const findByIngestToken = (token: string): Promise<IDevice | null> =>
   Device.findOne({ ingestTokenHash: hashOpaqueToken(token) }).exec();
+
+/** Whether the device still holds a live ingest token (and so can poll). */
+export const hasIngestToken = async (
+  deviceId: Types.ObjectId,
+): Promise<boolean> =>
+  (await Device.exists({
+    _id: deviceId,
+    ingestTokenHash: { $exists: true },
+  })) !== null;

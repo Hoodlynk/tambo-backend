@@ -8,7 +8,9 @@ import type {
 import { AppError } from '../utils/appError';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
 import * as deliveryService from './delivery.service';
+import * as deviceCommandService from './deviceCommand.service';
 import * as deviceService from './device.service';
+import * as partnerEvents from './partnerEvents';
 import { logger } from '../utils/logger';
 
 /**
@@ -49,6 +51,7 @@ export const openEpisode = async (
     void deliveryService.sendFirstAlert(episode, device).catch((error) => {
       logger.error({ err: error }, 'failed to dispatch first alert');
     });
+    partnerEvents.episodeOpened(device, episode);
 
     return { episode, created: true };
   } catch (error) {
@@ -80,13 +83,14 @@ export const markStolen = async (
   return openEpisode(device, 'owner', note);
 };
 
-/** Owner marks the device back in hand; resolves the open episode. */
-export const markRecovered = async (
-  userId: string,
-  deviceId: string,
+/**
+ * Resolves the device's open episode as recovered: back in hand, commands
+ * cancelled. Whoever answers for the phone decides - its owner, or for a phone
+ * nobody has linked yet, its partner.
+ */
+export const resolveRecovered = async (
+  device: IDevice,
 ): Promise<ITheftEpisode> => {
-  const device = await deviceService.getOwned(userId, deviceId);
-
   const episode = await TheftEpisode.findOneAndUpdate(
     { device: device._id, status: 'open' },
     {
@@ -107,8 +111,17 @@ export const markRecovered = async (
   }
 
   await Device.updateOne({ _id: device._id }, { $set: { status: 'active' } });
+  await deviceCommandService.cancelForEpisode(episode._id);
+  partnerEvents.episodeResolved(device, episode);
   return episode;
 };
+
+/** Owner marks the device back in hand; resolves the open episode. */
+export const markRecovered = async (
+  userId: string,
+  deviceId: string,
+): Promise<ITheftEpisode> =>
+  resolveRecovered(await deviceService.getOwned(userId, deviceId));
 
 export const list = async (
   userId: string,

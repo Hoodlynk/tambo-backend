@@ -47,4 +47,6 @@ the decisions the owner must take, and what the backend builds for all of them
 
 `Partner`, `PartnerApiKey`, `User.partner`, `Device.partner`, `partnerCode` at
 register and enrol, `planSource`, and `GET /client/config` with the brand
-theme and flags. Everything above plugs into those.
+theme and flags. Everything above plugs into those. **Built 2026-11-13**; the
+contract is in [partners-api.md](partners-api.md). Brand legal overrides
+are deferred (see the roadmap).

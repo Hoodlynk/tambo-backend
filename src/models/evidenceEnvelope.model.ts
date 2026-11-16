@@ -45,7 +45,8 @@ export interface IEvidenceEnvelope extends Document<Types.ObjectId> {
   _id: Types.ObjectId;
   /** Client-generated id; the idempotency key for upload retries. */
   envelopeId: string;
-  user: Types.ObjectId;
+  /** Absent for evidence from a phone nobody has linked yet (B4). */
+  user?: Types.ObjectId;
   device: Types.ObjectId;
   episode?: Types.ObjectId;
   type: EnvelopeType;
@@ -66,6 +67,12 @@ export interface IEvidenceEnvelope extends Document<Types.ObjectId> {
   camera?: SnapshotCamera;
   trigger?: SnapshotTrigger;
   seq?: number;
+  /**
+   * The remote command this envelope answers (B2), copied from the payload
+   * only after checking the command belongs to the same device. A read model
+   * like the burst columns; the payload remains the evidence.
+   */
+  commandId?: Types.ObjectId;
   expiresAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -74,7 +81,7 @@ export interface IEvidenceEnvelope extends Document<Types.ObjectId> {
 const evidenceEnvelopeSchema = new Schema<IEvidenceEnvelope>(
   {
     envelopeId: { type: String, required: true, unique: true },
-    user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    user: { type: Schema.Types.ObjectId, ref: 'User' },
     device: { type: Schema.Types.ObjectId, ref: 'Device', required: true },
     episode: { type: Schema.Types.ObjectId, ref: 'TheftEpisode' },
     type: { type: String, enum: ENVELOPE_TYPES, required: true },
@@ -90,6 +97,7 @@ const evidenceEnvelopeSchema = new Schema<IEvidenceEnvelope>(
     camera: { type: String, enum: SNAPSHOT_CAMERAS },
     trigger: { type: String, enum: SNAPSHOT_TRIGGERS },
     seq: { type: Number },
+    commandId: { type: Schema.Types.ObjectId, ref: 'DeviceCommand' },
     // TTL index: retention enforced by the database, not a policy paragraph
     expiresAt: { type: Date, required: true, expires: 0 },
   },

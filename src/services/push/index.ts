@@ -15,4 +15,9 @@ const drivers: Record<typeof config.push.driver, Pusher> = {
 };
 
 export const pusher: Pusher = drivers[config.push.driver];
-export type { Pusher, PushMessage, PushResult } from './push.interface';
+export type {
+  DataPushMessage,
+  Pusher,
+  PushMessage,
+  PushResult,
+} from './push.interface';

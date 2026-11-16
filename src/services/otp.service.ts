@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import config from '../config/config';
+import type { ClientContext } from '../config/client';
 import OtpChallenge from '../models/otpChallenge.model';
 import PasswordResetToken from '../models/passwordResetToken.model';
 import * as buddyService from './buddy.service';
@@ -226,6 +227,7 @@ const applyPurpose = async (
   user: IUser,
   userAgent?: string,
   ip?: string,
+  client?: ClientContext,
 ): Promise<VerifiedSession> => {
   const context = { userAgent, ip };
   switch (challenge.purpose) {
@@ -295,6 +297,7 @@ const applyPurpose = async (
   const tokens = await sessionService.startSession(
     user,
     userAgent ?? challenge.userAgent,
+    client,
   );
   return { user, tokens };
 };
@@ -310,6 +313,7 @@ export const verifyChallenge = async (
   code: string,
   userAgent?: string,
   ip?: string,
+  client?: ClientContext,
 ): Promise<VerifiedSession> => {
   const challenge = await OtpChallenge.findOne({
     _id: challengeId,
@@ -374,5 +378,5 @@ export const verifyChallenge = async (
     ip,
     meta: { purpose: challenge.purpose },
   });
-  return applyPurpose(claimed, user, userAgent, ip);
+  return applyPurpose(claimed, user, userAgent, ip, client);
 };

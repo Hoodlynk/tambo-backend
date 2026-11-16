@@ -22,7 +22,11 @@ export type EpisodeResolution = (typeof EPISODE_RESOLUTIONS)[number];
  */
 export interface ITheftEpisode extends Document<Types.ObjectId> {
   _id: Types.ObjectId;
-  user: Types.ObjectId;
+  /**
+   * Absent while the device has no owner (B4): a provisioned phone can still
+   * detect a theft. Linking the phone later hands its history to the owner.
+   */
+  user?: Types.ObjectId;
   device: Types.ObjectId;
   status: EpisodeStatus;
   openedBy: EpisodeOpener;
@@ -37,12 +41,7 @@ export interface ITheftEpisode extends Document<Types.ObjectId> {
 
 const theftEpisodeSchema = new Schema<ITheftEpisode>(
   {
-    user: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-      index: true,
-    },
+    user: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     device: { type: Schema.Types.ObjectId, ref: 'Device', required: true },
     status: { type: String, enum: EPISODE_STATUSES, default: 'open' },
     openedBy: { type: String, enum: EPISODE_OPENERS, required: true },

@@ -74,7 +74,7 @@ export interface paths {
         put?: never;
         /**
          * Start a signup (always answers with an OTP challenge)
-         * @description No session exists until the emailed 6-digit code is verified at /auth/otp/verify. The mailbox must be proven.
+         * @description No session exists until the emailed 6-digit code is verified at /auth/otp/verify. The mailbox must be proven. A white-label build passes `partnerCode`; the account joins that partner and receives the partner's default plan, if it has one.
          */
         post: {
             parameters: {
@@ -90,6 +90,7 @@ export interface paths {
                         /** @description Normalized to lowercase; uniqueness is case-insensitive. */
                         email: string;
                         password: string;
+                        partnerCode?: string;
                     };
                 };
             };
@@ -110,7 +111,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `validation_error` — A field failed validation; see details[]. */
+                /** @description `validation_error` — A field failed validation; see details[]. · `unknown_partner` — partnerCode is unknown or the partner is suspended. */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -189,6 +190,8 @@ export interface paths {
                                 phone?: string;
                                 /** @enum {string} */
                                 role: "user" | "admin";
+                                /** @description The white-label partner the account signed up under. */
+                                partner?: string;
                                 /** @description ISO-8601 timestamp */
                                 emailVerifiedAt?: string;
                                 /** @description ISO-8601 timestamp */
@@ -309,6 +312,8 @@ export interface paths {
                                 phone?: string;
                                 /** @enum {string} */
                                 role: "user" | "admin";
+                                /** @description The white-label partner the account signed up under. */
+                                partner?: string;
                                 /** @description ISO-8601 timestamp */
                                 emailVerifiedAt?: string;
                                 /** @description ISO-8601 timestamp */
@@ -431,6 +436,8 @@ export interface paths {
                                 phone?: string;
                                 /** @enum {string} */
                                 role: "user" | "admin";
+                                /** @description The white-label partner the account signed up under. */
+                                partner?: string;
                                 /** @description ISO-8601 timestamp */
                                 emailVerifiedAt?: string;
                                 /** @description ISO-8601 timestamp */
@@ -539,6 +546,8 @@ export interface paths {
                                 phone?: string;
                                 /** @enum {string} */
                                 role: "user" | "admin";
+                                /** @description The white-label partner the account signed up under. */
+                                partner?: string;
                                 /** @description ISO-8601 timestamp */
                                 emailVerifiedAt?: string;
                                 /** @description ISO-8601 timestamp */
@@ -639,6 +648,8 @@ export interface paths {
                                 phone?: string;
                                 /** @enum {string} */
                                 role: "user" | "admin";
+                                /** @description The white-label partner the account signed up under. */
+                                partner?: string;
                                 /** @description ISO-8601 timestamp */
                                 emailVerifiedAt?: string;
                                 /** @description ISO-8601 timestamp */
@@ -791,6 +802,8 @@ export interface paths {
                                 phone?: string;
                                 /** @enum {string} */
                                 role: "user" | "admin";
+                                /** @description The white-label partner the account signed up under. */
+                                partner?: string;
                                 /** @description ISO-8601 timestamp */
                                 emailVerifiedAt?: string;
                                 /** @description ISO-8601 timestamp */
@@ -1048,6 +1061,8 @@ export interface paths {
                                 phone?: string;
                                 /** @enum {string} */
                                 role: "user" | "admin";
+                                /** @description The white-label partner the account signed up under. */
+                                partner?: string;
                                 /** @description ISO-8601 timestamp */
                                 emailVerifiedAt?: string;
                                 /** @description ISO-8601 timestamp */
@@ -1228,6 +1243,8 @@ export interface paths {
                                 phone?: string;
                                 /** @enum {string} */
                                 role: "user" | "admin";
+                                /** @description The white-label partner the account signed up under. */
+                                partner?: string;
                                 /** @description ISO-8601 timestamp */
                                 emailVerifiedAt?: string;
                                 /** @description ISO-8601 timestamp */
@@ -1288,6 +1305,13 @@ export interface paths {
                             sessions: {
                                 id: string;
                                 userAgent: string | null;
+                                /**
+                                 * @description From X-Client-Platform; null when never sent.
+                                 * @enum {string|null}
+                                 */
+                                clientPlatform: "android" | "ios" | "web" | null;
+                                /** @description From X-Client-Version; updated on every refresh. */
+                                clientVersion: string | null;
                                 /** @description ISO-8601 timestamp */
                                 createdAt: string;
                                 /** @description ISO-8601 timestamp */
@@ -1346,7 +1370,7 @@ export interface paths {
                         "application/json": {
                             events: {
                                 /** @enum {string} */
-                                type: "login_succeeded" | "login_failed" | "login_challenged" | "otp_verified" | "otp_failed" | "password_changed" | "email_changed" | "password_reset_requested" | "password_reset" | "sessions_revoked_all" | "session_revoked" | "account_locked" | "plan_changed";
+                                type: "login_succeeded" | "login_failed" | "login_challenged" | "otp_verified" | "otp_failed" | "password_changed" | "email_changed" | "password_reset_requested" | "password_reset" | "sessions_revoked_all" | "session_revoked" | "account_locked" | "plan_changed" | "partner_key_issued" | "partner_key_revoked";
                                 /** @description ISO-8601 timestamp */
                                 at: string;
                                 ip?: string;
@@ -1694,6 +1718,8 @@ export interface paths {
                                 phone?: string;
                                 /** @enum {string} */
                                 role: "user" | "admin";
+                                /** @description The white-label partner the account signed up under. */
+                                partner?: string;
                                 /** @description ISO-8601 timestamp */
                                 emailVerifiedAt?: string;
                                 /** @description ISO-8601 timestamp */
@@ -1777,7 +1803,8 @@ export interface paths {
                         "application/json": {
                             devices: ({
                                 _id: string;
-                                user: string;
+                                /** @description Absent on a provisioned phone nobody has linked yet. */
+                                user?: string;
                                 name: string;
                                 imeis: string[];
                                 make: string;
@@ -1787,6 +1814,16 @@ export interface paths {
                                 failedUnlockThreshold: number;
                                 /** @enum {string} */
                                 status: "active" | "stolen";
+                                /** @description The partner fleet the phone was enrolled under. */
+                                partner?: string;
+                                /** @description Partner-supplied hardware serial. */
+                                serial?: string;
+                                /** @description Set when a partner provisioned the phone. */
+                                provisionedAt?: string;
+                                /** @description When the provisioned phone claimed its ingest token. */
+                                claimedAt?: string;
+                                /** @description When a person linked the provisioned phone to their account. */
+                                linkedAt?: string;
                                 /** @description ISO-8601 timestamp */
                                 createdAt: string;
                                 /** @description ISO-8601 timestamp */
@@ -1811,7 +1848,7 @@ export interface paths {
         put?: never;
         /**
          * Enrol a device (returns its one-shot ingest token)
-         * @description Gated on current T&C + privacy acceptance. The ingestToken appears in this response and never again - only its hash is stored.
+         * @description Gated on current T&C + privacy acceptance. The ingestToken appears in this response and never again - only its hash is stored. The device joins `partnerCode`'s fleet, or the owner's partner when omitted.
          */
         post: {
             parameters: {
@@ -1830,6 +1867,7 @@ export interface paths {
                         colour?: string;
                         purchaseInfo?: string;
                         failedUnlockThreshold?: number;
+                        partnerCode?: string;
                     };
                 };
             };
@@ -1843,7 +1881,8 @@ export interface paths {
                         "application/json": {
                             device: {
                                 _id: string;
-                                user: string;
+                                /** @description Absent on a provisioned phone nobody has linked yet. */
+                                user?: string;
                                 name: string;
                                 imeis: string[];
                                 make: string;
@@ -1853,6 +1892,16 @@ export interface paths {
                                 failedUnlockThreshold: number;
                                 /** @enum {string} */
                                 status: "active" | "stolen";
+                                /** @description The partner fleet the phone was enrolled under. */
+                                partner?: string;
+                                /** @description Partner-supplied hardware serial. */
+                                serial?: string;
+                                /** @description Set when a partner provisioned the phone. */
+                                provisionedAt?: string;
+                                /** @description When the provisioned phone claimed its ingest token. */
+                                claimedAt?: string;
+                                /** @description When a person linked the provisioned phone to their account. */
+                                linkedAt?: string;
                                 /** @description ISO-8601 timestamp */
                                 createdAt: string;
                                 /** @description ISO-8601 timestamp */
@@ -1865,7 +1914,7 @@ export interface paths {
                         };
                     };
                 };
-                /** @description `validation_error` — A field failed validation; see details[]. */
+                /** @description `validation_error` — A field failed validation; see details[]. · `unknown_partner` — partnerCode is unknown or the partner is suspended. */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -1909,6 +1958,308 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/devices/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A provisioned phone claims its ingest token (no account)
+         * @description Device-first enrolment (docs/provisioning-api.md). The phone trades the provisioning token its partner gave it for an ingest token and starts protecting before anyone signs in. `installId` is a random id the app keeps per install: the same install may retry a claim whose response was lost (200, the ingest token rotates) until the phone is linked; any other install gets 409. When the server enforces Play Integrity, `integrityToken` is required and its request hash must be sha256("tambo-claim:<provisioningToken>:<installId>") in hex.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        provisioningToken: string;
+                        installId: string;
+                        integrityToken?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description The same install retried; a fresh ingest token. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            device: {
+                                _id: string;
+                                /** @description Absent on a provisioned phone nobody has linked yet. */
+                                user?: string;
+                                name: string;
+                                imeis: string[];
+                                make: string;
+                                deviceModel: string;
+                                colour?: string;
+                                purchaseInfo?: string;
+                                failedUnlockThreshold: number;
+                                /** @enum {string} */
+                                status: "active" | "stolen";
+                                /** @description The partner fleet the phone was enrolled under. */
+                                partner?: string;
+                                /** @description Partner-supplied hardware serial. */
+                                serial?: string;
+                                /** @description Set when a partner provisioned the phone. */
+                                provisionedAt?: string;
+                                /** @description When the provisioned phone claimed its ingest token. */
+                                claimedAt?: string;
+                                /** @description When a person linked the provisioned phone to their account. */
+                                linkedAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                                /** @description ISO-8601 timestamp */
+                                updatedAt: string;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                            /** @description Shown ONCE; only its hash is stored. Send as X-Device-Token. */
+                            ingestToken: string;
+                        };
+                    };
+                };
+                /** @description Claimed. The ingest token is shown once. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            device: {
+                                _id: string;
+                                /** @description Absent on a provisioned phone nobody has linked yet. */
+                                user?: string;
+                                name: string;
+                                imeis: string[];
+                                make: string;
+                                deviceModel: string;
+                                colour?: string;
+                                purchaseInfo?: string;
+                                failedUnlockThreshold: number;
+                                /** @enum {string} */
+                                status: "active" | "stolen";
+                                /** @description The partner fleet the phone was enrolled under. */
+                                partner?: string;
+                                /** @description Partner-supplied hardware serial. */
+                                serial?: string;
+                                /** @description Set when a partner provisioned the phone. */
+                                provisionedAt?: string;
+                                /** @description When the provisioned phone claimed its ingest token. */
+                                claimedAt?: string;
+                                /** @description When a person linked the provisioned phone to their account. */
+                                linkedAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                                /** @description ISO-8601 timestamp */
+                                updatedAt: string;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                            /** @description Shown ONCE; only its hash is stored. Send as X-Device-Token. */
+                            ingestToken: string;
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. · `integrity_required` — The server enforces Play Integrity and none was sent. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_provisioning_token` — Unknown token, or the partner is suspended. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `integrity_failed` — The Play Integrity verdict was refused. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `device_already_claimed` — Another install claimed this phone, or it is already linked. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/devices/{id}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link a provisioned phone to the signed-in account
+         * @description Needs BOTH the Bearer session (who) and the X-Device-Token of the phone being linked (proof of holding it). The account inherits the phone's history. Idempotent for the same account. Gated on current T&C + privacy acceptance, and counted against the plan's device allowance, like enrolment.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The ingest token the phone received when it claimed. */
+                    "X-Device-Token": string;
+                };
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Linked. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            device: {
+                                _id: string;
+                                /** @description Absent on a provisioned phone nobody has linked yet. */
+                                user?: string;
+                                name: string;
+                                imeis: string[];
+                                make: string;
+                                deviceModel: string;
+                                colour?: string;
+                                purchaseInfo?: string;
+                                failedUnlockThreshold: number;
+                                /** @enum {string} */
+                                status: "active" | "stolen";
+                                /** @description The partner fleet the phone was enrolled under. */
+                                partner?: string;
+                                /** @description Partner-supplied hardware serial. */
+                                serial?: string;
+                                /** @description Set when a partner provisioned the phone. */
+                                provisionedAt?: string;
+                                /** @description When the provisioned phone claimed its ingest token. */
+                                claimedAt?: string;
+                                /** @description When a person linked the provisioned phone to their account. */
+                                linkedAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                                /** @description ISO-8601 timestamp */
+                                updatedAt: string;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. · `invalid_device_token` — Revoked or unknown X-Device-Token ("missing_device_token" when absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `legal_acceptance_required` — Accept the current terms + privacy first (see /api/v1/legal). */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `device_not_found` — Unknown id, or the device token is for another phone. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `device_already_linked` — The phone belongs to another account. · `episode_open` — The phone has an open theft episode; its partner resolves it first. · `device_limit` — The plan's device allowance is used up. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/devices/{id}": {
         parameters: {
             query?: never;
@@ -1937,7 +2288,8 @@ export interface paths {
                         "application/json": {
                             device: {
                                 _id: string;
-                                user: string;
+                                /** @description Absent on a provisioned phone nobody has linked yet. */
+                                user?: string;
                                 name: string;
                                 imeis: string[];
                                 make: string;
@@ -1947,6 +2299,16 @@ export interface paths {
                                 failedUnlockThreshold: number;
                                 /** @enum {string} */
                                 status: "active" | "stolen";
+                                /** @description The partner fleet the phone was enrolled under. */
+                                partner?: string;
+                                /** @description Partner-supplied hardware serial. */
+                                serial?: string;
+                                /** @description Set when a partner provisioned the phone. */
+                                provisionedAt?: string;
+                                /** @description When the provisioned phone claimed its ingest token. */
+                                claimedAt?: string;
+                                /** @description When a person linked the provisioned phone to their account. */
+                                linkedAt?: string;
                                 /** @description ISO-8601 timestamp */
                                 createdAt: string;
                                 /** @description ISO-8601 timestamp */
@@ -2080,7 +2442,8 @@ export interface paths {
                         "application/json": {
                             device: {
                                 _id: string;
-                                user: string;
+                                /** @description Absent on a provisioned phone nobody has linked yet. */
+                                user?: string;
                                 name: string;
                                 imeis: string[];
                                 make: string;
@@ -2090,6 +2453,16 @@ export interface paths {
                                 failedUnlockThreshold: number;
                                 /** @enum {string} */
                                 status: "active" | "stolen";
+                                /** @description The partner fleet the phone was enrolled under. */
+                                partner?: string;
+                                /** @description Partner-supplied hardware serial. */
+                                serial?: string;
+                                /** @description Set when a partner provisioned the phone. */
+                                provisionedAt?: string;
+                                /** @description When the provisioned phone claimed its ingest token. */
+                                claimedAt?: string;
+                                /** @description When a person linked the provisioned phone to their account. */
+                                linkedAt?: string;
                                 /** @description ISO-8601 timestamp */
                                 createdAt: string;
                                 /** @description ISO-8601 timestamp */
@@ -2179,6 +2552,120 @@ export interface paths {
                                         accuracyM?: number;
                                     } | null;
                                 }[];
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `device_not_found` */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/devices/{id}/status-card": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The owner's status card for one phone (widget data)
+         * @description Everything a widget or Zero-screen card shows about this phone, including an open episode and, from evidence around it, where the phone was last seen. Sent with Cache-Control: no-store.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            card: {
+                                deviceId: string;
+                                deviceName: string;
+                                /**
+                                 * @description stolen: an episode is open. paused: the ingest token was revoked, so the phone sends no evidence.
+                                 * @enum {string}
+                                 */
+                                state: "protected" | "stolen" | "paused";
+                                brand: {
+                                    displayName: string;
+                                    logoUrl: string | null;
+                                    colors: {
+                                        primary: string;
+                                        onPrimary: string;
+                                    };
+                                    supportUrl: string | null;
+                                    supportEmail: string | null;
+                                };
+                                /** @description Server receipt time of the phone's latest evidence. */
+                                lastSeenAt: string | null;
+                                unlockAttempts: {
+                                    inWindow: number;
+                                    threshold: number;
+                                };
+                                episode: {
+                                    id: string;
+                                    /** @description ISO-8601 timestamp */
+                                    openedAt: string;
+                                    /** @enum {string} */
+                                    openedBy: "owner" | "device";
+                                    snapshotBursts: number;
+                                    pendingCommands: number;
+                                    /** @description Only from evidence around this episode. */
+                                    lastLocation: {
+                                        lat: number;
+                                        lng: number;
+                                        accuracyM?: number;
+                                        /** @description ISO-8601 timestamp */
+                                        at: string;
+                                    } | null;
+                                } | null;
+                                refreshAfterSeconds: number;
+                                /** @description ISO-8601 timestamp */
+                                generatedAt: string;
                             };
                         };
                     };
@@ -2370,7 +2857,8 @@ export interface paths {
                         "application/json": {
                             episode: {
                                 _id: string;
-                                user: string;
+                                /** @description Absent while the device has no owner (partner-provisioned). */
+                                user?: string;
                                 device: string;
                                 /** @enum {string} */
                                 status: "open" | "resolved";
@@ -2397,7 +2885,8 @@ export interface paths {
                         "application/json": {
                             episode: {
                                 _id: string;
-                                user: string;
+                                /** @description Absent while the device has no owner (partner-provisioned). */
+                                user?: string;
                                 device: string;
                                 /** @enum {string} */
                                 status: "open" | "resolved";
@@ -2480,7 +2969,8 @@ export interface paths {
                         "application/json": {
                             episode: {
                                 _id: string;
-                                user: string;
+                                /** @description Absent while the device has no owner (partner-provisioned). */
+                                user?: string;
                                 device: string;
                                 /** @enum {string} */
                                 status: "open" | "resolved";
@@ -2533,6 +3023,387 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/devices/{id}/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A device's recent commands and where each got to (newest first) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            commands: ({
+                                /** @description Dedup on this: delivery is at-least-once. */
+                                id: string;
+                                /** @enum {string} */
+                                type: "snapshot" | "locate" | "ring";
+                                params: {
+                                    /** @description snapshot: the cameras to fire. */
+                                    cameras?: ("front" | "back")[];
+                                    /** @description ring: how long to ring. */
+                                    durationSeconds?: number;
+                                } & {
+                                    [key: string]: unknown;
+                                };
+                                /** @description ISO-8601 timestamp */
+                                issuedAt: string;
+                                /** @description Do not act on the command after this. */
+                                expiresAt: string;
+                                deviceId: string;
+                                episodeId: string;
+                                /**
+                                 * @description pending -> delivered -> completed | failed; cancelled by the owner or when the episode resolves; expired once past expiresAt unanswered.
+                                 * @enum {string}
+                                 */
+                                status: "pending" | "delivered" | "completed" | "failed" | "cancelled" | "expired";
+                                /** @description Answering envelopes received (a snapshot sends several). */
+                                resultCount: number;
+                                /** @description ISO-8601 timestamp */
+                                deliveredAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                completedAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                failedAt?: string;
+                                failureReason?: string;
+                                /** @description ISO-8601 timestamp */
+                                cancelledAt?: string;
+                            } & {
+                                [key: string]: unknown;
+                            })[];
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `device_not_found` */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Ask the stolen phone to snapshot, locate, or ring
+         * @description Only while the device has an open episode. The phone is woken by a silent push when it has a device-scoped push token, and otherwise picks the command up on its next poll or ingest reply. Repeating a type that is still outstanding converges on it (200) instead of queueing another. cameras applies to snapshot only, durationSeconds to ring only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        type: "snapshot" | "locate" | "ring";
+                        cameras?: ("front" | "back")[];
+                        durationSeconds?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Converged on the outstanding command of this type. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description A command as the owner sees it, with where it got to. */
+                            command: {
+                                /** @description Dedup on this: delivery is at-least-once. */
+                                id: string;
+                                /** @enum {string} */
+                                type: "snapshot" | "locate" | "ring";
+                                params: {
+                                    /** @description snapshot: the cameras to fire. */
+                                    cameras?: ("front" | "back")[];
+                                    /** @description ring: how long to ring. */
+                                    durationSeconds?: number;
+                                } & {
+                                    [key: string]: unknown;
+                                };
+                                /** @description ISO-8601 timestamp */
+                                issuedAt: string;
+                                /** @description Do not act on the command after this. */
+                                expiresAt: string;
+                                deviceId: string;
+                                episodeId: string;
+                                /**
+                                 * @description pending -> delivered -> completed | failed; cancelled by the owner or when the episode resolves; expired once past expiresAt unanswered.
+                                 * @enum {string}
+                                 */
+                                status: "pending" | "delivered" | "completed" | "failed" | "cancelled" | "expired";
+                                /** @description Answering envelopes received (a snapshot sends several). */
+                                resultCount: number;
+                                /** @description ISO-8601 timestamp */
+                                deliveredAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                completedAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                failedAt?: string;
+                                failureReason?: string;
+                                /** @description ISO-8601 timestamp */
+                                cancelledAt?: string;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description Issued. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description A command as the owner sees it, with where it got to. */
+                            command: {
+                                /** @description Dedup on this: delivery is at-least-once. */
+                                id: string;
+                                /** @enum {string} */
+                                type: "snapshot" | "locate" | "ring";
+                                params: {
+                                    /** @description snapshot: the cameras to fire. */
+                                    cameras?: ("front" | "back")[];
+                                    /** @description ring: how long to ring. */
+                                    durationSeconds?: number;
+                                } & {
+                                    [key: string]: unknown;
+                                };
+                                /** @description ISO-8601 timestamp */
+                                issuedAt: string;
+                                /** @description Do not act on the command after this. */
+                                expiresAt: string;
+                                deviceId: string;
+                                episodeId: string;
+                                /**
+                                 * @description pending -> delivered -> completed | failed; cancelled by the owner or when the episode resolves; expired once past expiresAt unanswered.
+                                 * @enum {string}
+                                 */
+                                status: "pending" | "delivered" | "completed" | "failed" | "cancelled" | "expired";
+                                /** @description Answering envelopes received (a snapshot sends several). */
+                                resultCount: number;
+                                /** @description ISO-8601 timestamp */
+                                deliveredAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                completedAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                failedAt?: string;
+                                failureReason?: string;
+                                /** @description ISO-8601 timestamp */
+                                cancelledAt?: string;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `device_not_found` */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `episode_not_open` — Commands need an open episode (mark the device stolen). · `device_token_revoked` — The device has no ingest token, so it cannot poll. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/devices/{id}/commands/{commandId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel an outstanding command (idempotent)
+         * @description A command that already finished, or was already cancelled, is returned unchanged.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    commandId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description A command as the owner sees it, with where it got to. */
+                            command: {
+                                /** @description Dedup on this: delivery is at-least-once. */
+                                id: string;
+                                /** @enum {string} */
+                                type: "snapshot" | "locate" | "ring";
+                                params: {
+                                    /** @description snapshot: the cameras to fire. */
+                                    cameras?: ("front" | "back")[];
+                                    /** @description ring: how long to ring. */
+                                    durationSeconds?: number;
+                                } & {
+                                    [key: string]: unknown;
+                                };
+                                /** @description ISO-8601 timestamp */
+                                issuedAt: string;
+                                /** @description Do not act on the command after this. */
+                                expiresAt: string;
+                                deviceId: string;
+                                episodeId: string;
+                                /**
+                                 * @description pending -> delivered -> completed | failed; cancelled by the owner or when the episode resolves; expired once past expiresAt unanswered.
+                                 * @enum {string}
+                                 */
+                                status: "pending" | "delivered" | "completed" | "failed" | "cancelled" | "expired";
+                                /** @description Answering envelopes received (a snapshot sends several). */
+                                resultCount: number;
+                                /** @description ISO-8601 timestamp */
+                                deliveredAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                completedAt?: string;
+                                /** @description ISO-8601 timestamp */
+                                failedAt?: string;
+                                failureReason?: string;
+                                /** @description ISO-8601 timestamp */
+                                cancelledAt?: string;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `device_not_found` · `command_not_found` */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/episodes": {
         parameters: {
             query?: never;
@@ -2561,7 +3432,8 @@ export interface paths {
                         "application/json": {
                             episodes: ({
                                 _id: string;
-                                user: string;
+                                /** @description Absent while the device has no owner (partner-provisioned). */
+                                user?: string;
                                 device: string;
                                 /** @enum {string} */
                                 status: "open" | "resolved";
@@ -2635,7 +3507,8 @@ export interface paths {
                         "application/json": {
                             episode: {
                                 _id: string;
-                                user: string;
+                                /** @description Absent while the device has no owner (partner-provisioned). */
+                                user?: string;
                                 device: string;
                                 /** @enum {string} */
                                 status: "open" | "resolved";
@@ -3251,7 +4124,7 @@ export interface paths {
         put?: never;
         /**
          * Ingest a batch of evidence envelopes (idempotent per envelope id)
-         * @description Authenticates as a DEVICE via X-Device-Token. 200 even with per-envelope rejections: read the ACK list; retry only failures. An ingest response carrying episodeId/episodeOpened is the cue to start the location-trail fan-out and the camera bursts; trailCadenceSeconds and snapshotPolicy are the advisory cadence for each.
+         * @description Authenticates as a DEVICE via X-Device-Token. 200 even with per-envelope rejections: read the ACK list; retry only failures. An ingest response carrying episodeId/episodeOpened is the cue to start the location-trail fan-out and the camera bursts; trailCadenceSeconds and snapshotPolicy are the advisory cadence for each. pendingCommands lists outstanding remote commands (same shape as GET /evidence/commands).
          */
         post: {
             parameters: {
@@ -3304,6 +4177,27 @@ export interface paths {
                                 intervalSeconds: number;
                                 maxBurstsPerEpisode: number;
                             };
+                            /** @description Outstanding remote commands, oldest first; absent when none. Re-sent until answered - dedup on id. */
+                            pendingCommands?: ({
+                                /** @description Dedup on this: delivery is at-least-once. */
+                                id: string;
+                                /** @enum {string} */
+                                type: "snapshot" | "locate" | "ring";
+                                params: {
+                                    /** @description snapshot: the cameras to fire. */
+                                    cameras?: ("front" | "back")[];
+                                    /** @description ring: how long to ring. */
+                                    durationSeconds?: number;
+                                } & {
+                                    [key: string]: unknown;
+                                };
+                                /** @description ISO-8601 timestamp */
+                                issuedAt: string;
+                                /** @description Do not act on the command after this. */
+                                expiresAt: string;
+                            } & {
+                                [key: string]: unknown;
+                            })[];
                         };
                     };
                 };
@@ -3439,6 +4333,264 @@ export interface paths {
                 };
                 /** @description `payload_too_large` */
                 413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evidence/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The device polls for outstanding remote commands
+         * @description Authenticates as a DEVICE via X-Device-Token. Call on a device_command wake-up push, and on the trail timer while an episode is open. Commands are re-sent until answered, cancelled, or expired; dedup on id and ignore any past expiresAt.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The one-shot ingest token issued at device registration. */
+                    "X-Device-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Outstanding commands, oldest first; empty when none. */
+                            commands: ({
+                                /** @description Dedup on this: delivery is at-least-once. */
+                                id: string;
+                                /** @enum {string} */
+                                type: "snapshot" | "locate" | "ring";
+                                params: {
+                                    /** @description snapshot: the cameras to fire. */
+                                    cameras?: ("front" | "back")[];
+                                    /** @description ring: how long to ring. */
+                                    durationSeconds?: number;
+                                } & {
+                                    [key: string]: unknown;
+                                };
+                                /** @description ISO-8601 timestamp */
+                                issuedAt: string;
+                                /** @description Do not act on the command after this. */
+                                expiresAt: string;
+                            } & {
+                                [key: string]: unknown;
+                            })[];
+                        };
+                    };
+                };
+                /** @description `invalid_device_token` — Revoked or unknown X-Device-Token (code "missing_device_token" when absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evidence/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The phone's own status card, for its widget (device token)
+         * @description Discreet by design: never reveals an open episode, the failed-unlock count or a location, since whoever holds the phone during an episode is presumably the thief. Refresh every refreshAfterSeconds.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The one-shot ingest token issued at device registration. */
+                    "X-Device-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            card: {
+                                deviceId: string;
+                                deviceName: string;
+                                /**
+                                 * @description Never reveals an open episode: whoever holds the phone during one is presumably the thief. unlinked: nobody has signed in yet.
+                                 * @enum {string}
+                                 */
+                                state: "protected" | "unlinked";
+                                brand: {
+                                    displayName: string;
+                                    logoUrl: string | null;
+                                    colors: {
+                                        primary: string;
+                                        onPrimary: string;
+                                    };
+                                    supportUrl: string | null;
+                                    supportEmail: string | null;
+                                };
+                                refreshAfterSeconds: number;
+                                /** @description ISO-8601 timestamp */
+                                generatedAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description `invalid_device_token` — Revoked or unknown X-Device-Token (code "missing_device_token" when absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evidence/push-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The protected phone registers its push token (device token)
+         * @description Binds the FCM token to this enrolled device so remote commands can wake it, and so theft alerts about this device skip it. Call on every app start and on FCM token rotation; it keeps working after the owner's sessions are revoked. The token still receives the owner's other alerts.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The one-shot ingest token issued at device registration. */
+                    "X-Device-Token": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        token: string;
+                        /** @enum {string} */
+                        platform: "android" | "web" | "ios";
+                    };
+                };
+            };
+            responses: {
+                /** @description Registered. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            pushToken: {
+                                /** @enum {string} */
+                                platform: "android" | "web" | "ios";
+                                /** @description ISO-8601 timestamp */
+                                lastSeenAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_device_token` — Revoked or unknown X-Device-Token (code "missing_device_token" when absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `device_not_linked` — A provisioned phone nobody has linked yet has no account to register under; link it first. */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -4099,6 +5251,11 @@ export interface paths {
                                 effectivePlan: "free" | "pro" | "family";
                                 /** @description ISO-8601 timestamp */
                                 expiresAt: string | null;
+                                /**
+                                 * @description "partner" = paid for by a white-label partner; store billing never overwrites it.
+                                 * @enum {string}
+                                 */
+                                source: "self" | "partner";
                                 entitlements: {
                                     maxDevices: number;
                                     /** @description null = full history (bounded only by evidence retention). */
@@ -4165,6 +5322,8 @@ export interface paths {
                         plan: "free" | "pro" | "family";
                         /** Format: date-time */
                         expiresAt?: string;
+                        /** @enum {string} */
+                        source?: "self" | "partner";
                     };
                 };
             };
@@ -4186,6 +5345,11 @@ export interface paths {
                                 effectivePlan: "free" | "pro" | "family";
                                 /** @description ISO-8601 timestamp */
                                 expiresAt: string | null;
+                                /**
+                                 * @description "partner" = paid for by a white-label partner; store billing never overwrites it.
+                                 * @enum {string}
+                                 */
+                                source: "self" | "partner";
                                 entitlements: {
                                     maxDevices: number;
                                     /** @description null = full history (bounded only by evidence retention). */
@@ -4545,6 +5709,1684 @@ export interface paths {
             };
         };
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Launch handshake: update policy, brand theme, feature flags
+         * @description Call at app start, before sign-in. A white-label build passes its partner code; an unbranded build omits it and gets Tambo. Cacheable for 5 minutes. A suspended partner keeps its brand for phones in the field.
+         */
+        get: {
+            parameters: {
+                query: {
+                    platform: "android" | "ios" | "web";
+                    partner?: string;
+                };
+                header?: {
+                    /** @description The app build as X.Y.Z. Sent on every request by current clients (with X-Client-Platform); here it decides versions.update. */
+                    "X-Client-Version"?: string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            config: {
+                                /** @enum {string} */
+                                platform: "android" | "ios" | "web";
+                                versions: {
+                                    minimum: string;
+                                    recommended: string;
+                                    /**
+                                     * @description Against X-Client-Version: "required" = block until updated; "unknown" = the header was not sent.
+                                     * @enum {string}
+                                     */
+                                    update: "required" | "recommended" | "none" | "unknown";
+                                };
+                                partner: {
+                                    code: string;
+                                    name: string;
+                                    /** @enum {string} */
+                                    type: "oem" | "insurer" | "telco" | "enterprise" | "bnpl";
+                                } | null;
+                                brand: {
+                                    displayName: string;
+                                    logoUrl: string | null;
+                                    colors: {
+                                        primary: string;
+                                        onPrimary: string;
+                                    };
+                                    supportUrl: string | null;
+                                    supportEmail: string | null;
+                                };
+                                /** @description Optional features this build should show. Evidence is never optional. */
+                                features: {
+                                    buddies: boolean;
+                                    plans: boolean;
+                                    familiarLocations: boolean;
+                                };
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `unknown_partner` — No partner has that code: a misbuilt branded app. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which partner this API key belongs to (integration check) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            partner: {
+                                code: string;
+                                name: string;
+                                /** @enum {string} */
+                                type: "oem" | "insurer" | "telco" | "enterprise" | "bnpl";
+                            };
+                        };
+                    };
+                };
+                /** @description `invalid_api_key` — Unknown or revoked X-Api-Key, or the partner is suspended (code "missing_api_key" when absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Provision handsets in bulk; one single-use token per phone
+         * @description Device-first enrolment (docs/provisioning-api.md). Up to 500 handsets per call; one result per row, in order. Re-provisioning a handset this partner already has (any shared IMEI) never creates a second device: before the claim it reissues the token, after it it reports `claimed`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        devices: {
+                            imeis: string[];
+                            serial?: string;
+                            make: string;
+                            deviceModel: string;
+                            name?: string;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            devices: {
+                                deviceId: string;
+                                imeis: string[];
+                                serial: string | null;
+                                /**
+                                 * @description provisioned: new. reissued: already provisioned and not yet claimed, so a fresh token replaces the old one. claimed: the phone already holds its ingest token; no token is returned.
+                                 * @enum {string}
+                                 */
+                                status: "provisioned" | "reissued" | "claimed";
+                                /** @description Shown ONCE; only its hash is stored. Single use. */
+                                provisioningToken?: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_api_key` — Unknown or revoked X-Api-Key, or the partner is suspended (code "missing_api_key" when absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/devices/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One of the partner's phones: claimed, linked, open episode
+         * @description Any phone in the fleet, provisioned or enrolled under the partner code. The same device shape webhooks carry: no owner identity, no location, IMEIs only for phones the partner provisioned.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            device: {
+                                id: string;
+                                /** @description Only for phones this partner provisioned; null on a phone a person enrolled under the partner's code. */
+                                imeis: string[] | null;
+                                serial: string | null;
+                                make: string;
+                                deviceModel: string;
+                                /** @enum {string} */
+                                status: "active" | "stolen";
+                                provisioned: boolean;
+                                /** @description ISO-8601 timestamp */
+                                claimedAt: string | null;
+                                /** @description Whether a person has linked the phone. */
+                                linked: boolean;
+                                /** @description ISO-8601 timestamp */
+                                linkedAt: string | null;
+                            };
+                            openEpisode: {
+                                id: string;
+                                /** @description ISO-8601 timestamp */
+                                openedAt: string;
+                                openedBy: string;
+                            } | null;
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_api_key` — Unknown or revoked X-Api-Key, or the partner is suspended (code "missing_api_key" when absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `device_not_found` — Unknown id, or not this partner's device. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/devices/{id}/mark-recovered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve an episode on one of the partner's unlinked phones
+         * @description For a phone nobody has linked yet: a false alarm in the shop, or the handset is back in stock. A linked phone is its owner's to resolve.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Resolved. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            episode: {
+                                _id: string;
+                                /** @description Absent while the device has no owner (partner-provisioned). */
+                                user?: string;
+                                device: string;
+                                /** @enum {string} */
+                                status: "open" | "resolved";
+                                /** @enum {string} */
+                                openedBy: "owner" | "device";
+                                /** @description ISO-8601 timestamp */
+                                openedAt: string;
+                                /** @description ISO-8601 timestamp */
+                                resolvedAt?: string;
+                                resolution?: string;
+                                note?: string;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_api_key` — Unknown or revoked X-Api-Key, or the partner is suspended (code "missing_api_key" when absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `device_not_found` — Unknown id, or not this partner's device. · `episode_not_found` — No open episode. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `device_linked` — The phone has an owner; only they can resolve it. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The partner's endpoints, oldest first */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            webhooks: {
+                                id: string;
+                                url: string;
+                                events: ("episode.opened" | "episode.resolved" | "snapshot.received" | "device.claimed")[];
+                                /** @description The first characters of the signing secret, to tell them apart. */
+                                secretPrefix: string;
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description `invalid_api_key` — Unknown or revoked X-Api-Key, or the partner is suspended (code "missing_api_key" when absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Register an endpoint; the signing secret is shown once
+         * @description https only. `events` defaults to every event that exists today; events added later are opt-in. At most 5 endpoints per partner.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uri */
+                        url: string;
+                        events?: ("episode.opened" | "episode.resolved" | "snapshot.received" | "device.claimed")[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Created. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            webhook: {
+                                id: string;
+                                url: string;
+                                events: ("episode.opened" | "episode.resolved" | "snapshot.received" | "device.claimed")[];
+                                /** @description The first characters of the signing secret, to tell them apart. */
+                                secretPrefix: string;
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                            };
+                            /** @description The signing secret (whsec_...). Shown ONCE, here and on rotation; verify Tambo-Signature with it. */
+                            secret: string;
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_api_key` — Unknown or revoked X-Api-Key, or the partner is suspended (code "missing_api_key" when absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `webhook_limit` — The partner already has 5 endpoints. */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/webhooks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove an endpoint, with its queue and delivery log */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Removed. */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_api_key` — Unknown or revoked X-Api-Key, or the partner is suspended (code "missing_api_key" when absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `webhook_not_found` */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/webhooks/{id}/rotate-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace the signing secret; the old one stops at once
+         * @description Retries still queued are signed with the new secret.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Rotated. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            webhook: {
+                                id: string;
+                                url: string;
+                                events: ("episode.opened" | "episode.resolved" | "snapshot.received" | "device.claimed")[];
+                                /** @description The first characters of the signing secret, to tell them apart. */
+                                secretPrefix: string;
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                            };
+                            /** @description The signing secret (whsec_...). Shown ONCE, here and on rotation; verify Tambo-Signature with it. */
+                            secret: string;
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_api_key` — Unknown or revoked X-Api-Key, or the partner is suspended (code "missing_api_key" when absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `webhook_not_found` */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/webhooks/{id}/ping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a signed ping to one endpoint (integration check)
+         * @description Queued and sent at once, whatever the endpoint subscribes to. The delivery log shows the outcome.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Queued. */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            delivery: {
+                                id: string;
+                                /** @description Also sent as Tambo-Event-Id; dedup on it. */
+                                eventId: string;
+                                /** @enum {string} */
+                                type: "episode.opened" | "episode.resolved" | "snapshot.received" | "device.claimed" | "ping";
+                                /**
+                                 * @description failed: every retry was used up (8 attempts over ~45 h).
+                                 * @enum {string}
+                                 */
+                                status: "pending" | "delivered" | "failed";
+                                attempts: number;
+                                lastStatusCode: number | null;
+                                /** @description http_<status>, timeout, address_blocked, https_required, or a network error code. */
+                                lastError: string | null;
+                                /** @description ISO-8601 timestamp */
+                                nextAttemptAt: string | null;
+                                /** @description ISO-8601 timestamp */
+                                deliveredAt: string | null;
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_api_key` — Unknown or revoked X-Api-Key, or the partner is suspended (code "missing_api_key" when absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `webhook_not_found` */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/partner/webhooks/{id}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One endpoint's delivery log, newest first
+         * @description The last 50 deliveries; the log keeps 30 days.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @description Newest first, at most 50. */
+                            deliveries: {
+                                id: string;
+                                /** @description Also sent as Tambo-Event-Id; dedup on it. */
+                                eventId: string;
+                                /** @enum {string} */
+                                type: "episode.opened" | "episode.resolved" | "snapshot.received" | "device.claimed" | "ping";
+                                /**
+                                 * @description failed: every retry was used up (8 attempts over ~45 h).
+                                 * @enum {string}
+                                 */
+                                status: "pending" | "delivered" | "failed";
+                                attempts: number;
+                                lastStatusCode: number | null;
+                                /** @description http_<status>, timeout, address_blocked, https_required, or a network error code. */
+                                lastError: string | null;
+                                /** @description ISO-8601 timestamp */
+                                nextAttemptAt: string | null;
+                                /** @description ISO-8601 timestamp */
+                                deliveredAt: string | null;
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_api_key` — Unknown or revoked X-Api-Key, or the partner is suspended (code "missing_api_key" when absent). */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `webhook_not_found` */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `rate_limited` — Budget exhausted; retry after retryAfter seconds. */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/partners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List partners, newest first (admin only) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            partners: ({
+                                _id: string;
+                                code: string;
+                                name: string;
+                                /** @enum {string} */
+                                type: "oem" | "insurer" | "telco" | "enterprise" | "bnpl";
+                                /** @enum {string} */
+                                status: "active" | "suspended";
+                                brand: {
+                                    displayName: string;
+                                    logoUrl?: string;
+                                    colors: {
+                                        primary: string;
+                                        onPrimary: string;
+                                    };
+                                    supportUrl?: string;
+                                    supportEmail?: string;
+                                } & {
+                                    [key: string]: unknown;
+                                };
+                                features: {
+                                    buddies: boolean;
+                                    plans: boolean;
+                                    familiarLocations: boolean;
+                                };
+                                /** @enum {string} */
+                                defaultPlan?: "free" | "pro" | "family";
+                                alertRecipients: {
+                                    email: string;
+                                    name?: string;
+                                }[];
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                                /** @description ISO-8601 timestamp */
+                                updatedAt: string;
+                            } & {
+                                [key: string]: unknown;
+                            })[];
+                        };
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `forbidden` — Not an admin. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create a white-label partner (admin only) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        code: string;
+                        name: string;
+                        /** @enum {string} */
+                        type: "oem" | "insurer" | "telco" | "enterprise" | "bnpl";
+                        brand: {
+                            displayName: string;
+                            /** Format: uri */
+                            logoUrl?: string;
+                            colors: {
+                                primary: string;
+                                onPrimary: string;
+                            };
+                            /** Format: uri */
+                            supportUrl?: string;
+                            /** Format: email */
+                            supportEmail?: string;
+                        };
+                        features?: {
+                            buddies?: boolean;
+                            plans?: boolean;
+                            familiarLocations?: boolean;
+                        };
+                        /** @enum {string} */
+                        defaultPlan?: "free" | "pro" | "family";
+                        alertRecipients?: {
+                            email: string;
+                            name?: string;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Created. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            partner: {
+                                _id: string;
+                                code: string;
+                                name: string;
+                                /** @enum {string} */
+                                type: "oem" | "insurer" | "telco" | "enterprise" | "bnpl";
+                                /** @enum {string} */
+                                status: "active" | "suspended";
+                                brand: {
+                                    displayName: string;
+                                    logoUrl?: string;
+                                    colors: {
+                                        primary: string;
+                                        onPrimary: string;
+                                    };
+                                    supportUrl?: string;
+                                    supportEmail?: string;
+                                } & {
+                                    [key: string]: unknown;
+                                };
+                                features: {
+                                    buddies: boolean;
+                                    plans: boolean;
+                                    familiarLocations: boolean;
+                                };
+                                /** @enum {string} */
+                                defaultPlan?: "free" | "pro" | "family";
+                                alertRecipients: {
+                                    email: string;
+                                    name?: string;
+                                }[];
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                                /** @description ISO-8601 timestamp */
+                                updatedAt: string;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `forbidden` — Not an admin. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `partner_code_taken` */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/partners/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One partner (admin only) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            partner: {
+                                _id: string;
+                                code: string;
+                                name: string;
+                                /** @enum {string} */
+                                type: "oem" | "insurer" | "telco" | "enterprise" | "bnpl";
+                                /** @enum {string} */
+                                status: "active" | "suspended";
+                                brand: {
+                                    displayName: string;
+                                    logoUrl?: string;
+                                    colors: {
+                                        primary: string;
+                                        onPrimary: string;
+                                    };
+                                    supportUrl?: string;
+                                    supportEmail?: string;
+                                } & {
+                                    [key: string]: unknown;
+                                };
+                                features: {
+                                    buddies: boolean;
+                                    plans: boolean;
+                                    familiarLocations: boolean;
+                                };
+                                /** @enum {string} */
+                                defaultPlan?: "free" | "pro" | "family";
+                                alertRecipients: {
+                                    email: string;
+                                    name?: string;
+                                }[];
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                                /** @description ISO-8601 timestamp */
+                                updatedAt: string;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `forbidden` — Not an admin. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `partner_not_found` */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update a partner; the code is immutable (admin only)
+         * @description `features` merges flag by flag; `brand` and `alertRecipients` replace whole. `defaultPlan: null` stops granting a plan to new signups (existing accounts keep theirs). `status: "suspended"` stops new signups and API keys; branding keeps serving.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        /** @enum {string} */
+                        type?: "oem" | "insurer" | "telco" | "enterprise" | "bnpl";
+                        /** @enum {string} */
+                        status?: "active" | "suspended";
+                        brand?: {
+                            displayName: string;
+                            /** Format: uri */
+                            logoUrl?: string;
+                            colors: {
+                                primary: string;
+                                onPrimary: string;
+                            };
+                            /** Format: uri */
+                            supportUrl?: string;
+                            /** Format: email */
+                            supportEmail?: string;
+                        };
+                        features?: {
+                            buddies?: boolean;
+                            plans?: boolean;
+                            familiarLocations?: boolean;
+                        };
+                        /** @enum {string|null} */
+                        defaultPlan?: "free" | "pro" | "family" | null;
+                        alertRecipients?: {
+                            email: string;
+                            name?: string;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            partner: {
+                                _id: string;
+                                code: string;
+                                name: string;
+                                /** @enum {string} */
+                                type: "oem" | "insurer" | "telco" | "enterprise" | "bnpl";
+                                /** @enum {string} */
+                                status: "active" | "suspended";
+                                brand: {
+                                    displayName: string;
+                                    logoUrl?: string;
+                                    colors: {
+                                        primary: string;
+                                        onPrimary: string;
+                                    };
+                                    supportUrl?: string;
+                                    supportEmail?: string;
+                                } & {
+                                    [key: string]: unknown;
+                                };
+                                features: {
+                                    buddies: boolean;
+                                    plans: boolean;
+                                    familiarLocations: boolean;
+                                };
+                                /** @enum {string} */
+                                defaultPlan?: "free" | "pro" | "family";
+                                alertRecipients: {
+                                    email: string;
+                                    name?: string;
+                                }[];
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                                /** @description ISO-8601 timestamp */
+                                updatedAt: string;
+                            } & {
+                                [key: string]: unknown;
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `forbidden` — Not an admin. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `partner_not_found` */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/v1/admin/partners/{id}/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A partner's API keys, revoked ones included (admin only) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            keys: {
+                                id: string;
+                                name: string;
+                                /** @description The first characters, to tell keys apart. */
+                                prefix: string;
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                                /** @description ISO-8601 timestamp */
+                                lastUsedAt: string | null;
+                                /** @description ISO-8601 timestamp */
+                                revokedAt: string | null;
+                            }[];
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `forbidden` — Not an admin. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `partner_not_found` */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Issue a partner API key, shown once (admin only) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Issued. */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            key: {
+                                id: string;
+                                name: string;
+                                /** @description The first characters, to tell keys apart. */
+                                prefix: string;
+                                /** @description ISO-8601 timestamp */
+                                createdAt: string;
+                                /** @description ISO-8601 timestamp */
+                                lastUsedAt: string | null;
+                                /** @description ISO-8601 timestamp */
+                                revokedAt: string | null;
+                            };
+                            /** @description Shown ONCE; only its hash is stored. Send as X-Api-Key. */
+                            apiKey: string;
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `forbidden` — Not an admin. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `partner_not_found` */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/partners/{id}/keys/{keyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a partner API key; idempotent (admin only) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    keyId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Revoked. */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `forbidden` — Not an admin. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `partner_key_not_found` */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;

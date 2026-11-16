@@ -179,6 +179,15 @@ The pack JSON carries the same grouping as `snapshotSets`; the PDF renders a
 "Camera snapshots" section per set with the location link and up to two
 embedded frames per set (front first, then back).
 
+## Remote commands in the ingest reply (B2)
+
+While an episode is open, the reply carries `pendingCommands`: the
+outstanding owner commands (snapshot / locate / ring), oldest first, absent
+when there are none. They are re-sent until answered, so dedup on `id`. Answer
+with envelopes whose payload carries `commandId`. The full contract, plus
+the poll (`GET /evidence/commands`) and the device push registration
+(`POST /evidence/push-token`), is in [commands-api.md](commands-api.md).
+
 ## Retention as code
 
 Every envelope carries a computed `expiresAt` enforced by a TTL index:
@@ -188,7 +197,16 @@ an hourly sweep deletes expired files, because the TTL monitor cannot cascade
 into GridFS. The regulator asks to see the job - the index and the sweep ARE
 the job.
 
+## The phone's status card (B5)
+
+`GET /evidence/status` (device token) is what the phone's own widget shows:
+`protected` or `unlinked` and the brand, **never** an open episode, the
+failed-unlock count or a location. Contract:
+[status-card-api.md](status-card-api.md).
+
 ## Rate limits
 
 Keyed per device: 240 envelope batches/hour, 300 media uploads/hour (sized
-for a pro episode's 20 bursts of 3 frames per camera, with retries).
+for a pro episode's 20 bursts of 3 frames per camera, with retries), 360
+command polls/hour, 30 push-token registrations/hour, 120 status-card
+reads/hour.

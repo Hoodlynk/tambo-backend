@@ -15,6 +15,9 @@ export const AUTH_EVENT_TYPES = [
   'session_revoked',
   'account_locked',
   'plan_changed',
+  // admin acts on partner credentials, recorded against the admin's account
+  'partner_key_issued',
+  'partner_key_revoked',
 ] as const;
 export type AuthEventType = (typeof AUTH_EVENT_TYPES)[number];
 

@@ -240,6 +240,13 @@ The phone must **not** re-implement threshold logic, alerting, or episode
 management. Counting on the device would be defeated by a wrong device clock;
 the server counts by its own receipt time on purpose.
 
+**What the phone does build for B2 (remote commands):** register its FCM token
+with `POST /api/v1/evidence/push-token` (device token, every start). On a
+`device_command` data push, or on the trail timer, poll `GET
+/api/v1/evidence/commands`. Read `pendingCommands` on ingest replies, dedup
+on `id`, and answer through the normal envelope queue with `commandId` in the
+payload. Contract: [`docs/commands-api.md`](commands-api.md).
+
 ---
 
 ## 5. Owner-facing report (not called by the phone, but this is where the data shows up)

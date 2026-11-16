@@ -51,6 +51,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     req.body as LoginInput,
     userAgentOf(req),
     req.ip,
+    req.client,
   );
   // unproven mailbox: the SAME challenge envelope as mobile; no cookie yet
   if (isChallenge(result)) {
@@ -72,6 +73,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       code,
       userAgentOf(req),
       req.ip,
+      req.client,
     ),
   );
 };
@@ -80,6 +82,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
   const result = await sessionService.refresh(
     requireCookie(req),
     userAgentOf(req),
+    req.client,
   );
   sendWebAuthResult(res, result);
 };
@@ -97,6 +100,7 @@ export const resetPassword = async (
       req.body as ResetPasswordInput,
       userAgentOf(req),
       req.ip,
+      req.client,
     ),
   );
 };

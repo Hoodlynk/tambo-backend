@@ -20,12 +20,19 @@ const ENV_KEYS = [
   'AUTH_COOKIE_NAME',
   'AUTH_COOKIE_SAMESITE',
   'AUTH_COOKIE_SECURE',
+  'CLIENT_MIN_VERSION_ANDROID',
+  'CLIENT_RECOMMENDED_VERSION_ANDROID',
+  'CLAIM_INTEGRITY',
+  'WEBHOOK_ALLOW_LOCAL_TARGETS',
 ] as const;
 
 const originalEnv: Record<string, string | undefined> = {};
 
 beforeEach(() => {
   for (const key of ENV_KEYS) originalEnv[key] = process.env[key];
+  // tests/setup/env.ts turns this on for the webhook suite; the production
+  // boots simulated here must start from the production default
+  process.env.WEBHOOK_ALLOW_LOCAL_TARGETS = '';
 });
 
 afterEach(() => {
@@ -196,5 +203,96 @@ describe('PUSH_DRIVER', () => {
       process.env.PUSH_DRIVER = driver;
       expect(loadConfig).not.toThrow();
     }
+  });
+});
+
+describe('client version policy', () => {
+  const versions = () =>
+    (
+      loadConfig() as {
+        clientVersions: Record<
+          string,
+          { minimum: string; recommended: string }
+        >;
+      }
+    ).clientVersions;
+
+  it('defaults every platform to 0.0.0 (no policy)', () => {
+    process.env.CLIENT_MIN_VERSION_ANDROID = '';
+    process.env.CLIENT_RECOMMENDED_VERSION_ANDROID = '';
+    expect(versions().android).toEqual({
+      minimum: '0.0.0',
+      recommended: '0.0.0',
+    });
+    expect(versions().ios).toBeDefined();
+  });
+
+  it('refuses to boot on a malformed version', () => {
+    process.env.CLIENT_MIN_VERSION_ANDROID = '1.4';
+    expect(loadConfig).toThrow(/CLIENT_MIN_VERSION_ANDROID must be a version/);
+  });
+
+  it('refuses to boot when the minimum is above the recommended version', () => {
+    process.env.CLIENT_MIN_VERSION_ANDROID = '2.0.0';
+    process.env.CLIENT_RECOMMENDED_VERSION_ANDROID = '1.10.0';
+    expect(loadConfig).toThrow(/is above/);
+  });
+
+  it('compares numerically, not lexically', () => {
+    process.env.CLIENT_MIN_VERSION_ANDROID = '1.9.0';
+    process.env.CLIENT_RECOMMENDED_VERSION_ANDROID = '1.10.0';
+    expect(versions().android).toEqual({
+      minimum: '1.9.0',
+      recommended: '1.10.0',
+    });
+  });
+});
+
+describe('CLAIM_INTEGRITY', () => {
+  it('defaults to off', () => {
+    process.env.CLAIM_INTEGRITY = '';
+    const config = loadConfig() as { claim: { integrity: string } };
+    expect(config.claim.integrity).toBe('off');
+  });
+
+  it('refuses to boot on an unknown mode', () => {
+    process.env.CLAIM_INTEGRITY = 'strict';
+    expect(loadConfig).toThrow(/CLAIM_INTEGRITY must be one of/);
+  });
+
+  it('refuses to boot as required in production, where no verifier exists yet', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.JWT_ACCESS_SECRET = 'some-real-secret';
+    process.env.MONGODB_URI = 'mongodb://localhost/x';
+    process.env.PACK_SIGNING_SEED = 'a'.repeat(64);
+    process.env.AUTH_COOKIE_SECURE = '';
+    process.env.CLAIM_INTEGRITY = 'required';
+    expect(loadConfig).toThrow(/needs a Play Integrity verifier/);
+  });
+});
+
+describe('WEBHOOK_ALLOW_LOCAL_TARGETS', () => {
+  it('defaults to off', () => {
+    process.env.WEBHOOK_ALLOW_LOCAL_TARGETS = '';
+    const config = loadConfig() as {
+      webhooks: { allowLocalTargets: boolean };
+    };
+    expect(config.webhooks.allowLocalTargets).toBe(false);
+  });
+
+  it('refuses to boot on anything but true or false', () => {
+    process.env.WEBHOOK_ALLOW_LOCAL_TARGETS = 'yes';
+    expect(loadConfig).toThrow(/must be true or false/);
+  });
+
+  it('refuses to boot as true in production: partner URLs would reach the internal network', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.JWT_ACCESS_SECRET = 'some-real-secret';
+    process.env.MONGODB_URI = 'mongodb://localhost/x';
+    process.env.PACK_SIGNING_SEED = 'a'.repeat(64);
+    process.env.AUTH_COOKIE_SECURE = '';
+    process.env.CLAIM_INTEGRITY = '';
+    process.env.WEBHOOK_ALLOW_LOCAL_TARGETS = 'true';
+    expect(loadConfig).toThrow(/allowed only in development and test/);
   });
 });

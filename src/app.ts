@@ -7,14 +7,18 @@ import authWebRoutes from './routes/auth.web.routes';
 import healthRoutes from './routes/health.routes';
 import openapiRoutes from './routes/openapi.routes';
 import buddyRoutes from './routes/v1/buddy.routes';
+import adminPartnerRoutes from './routes/v1/adminPartner.routes';
 import buddyInviteRoutes from './routes/v1/buddyInvite.routes';
+import clientRoutes from './routes/v1/client.routes';
 import deviceRoutes from './routes/v1/device.routes';
 import evidenceRoutes from './routes/v1/evidence.routes';
 import episodeRoutes from './routes/v1/episode.routes';
 import familiarLocationRoutes from './routes/v1/familiarLocation.routes';
 import legalRoutes from './routes/v1/legal.routes';
+import partnerRoutes from './routes/v1/partner.routes';
 import planRoutes from './routes/v1/plan.routes';
 import pushTokenRoutes from './routes/v1/pushToken.routes';
+import { clientContext } from './middlewares/clientContext';
 import { errorHandler, notFoundHandler } from './middlewares/errorHandler';
 import { requestId, requestLog } from './middlewares/requestId';
 
@@ -33,6 +37,7 @@ app.use(helmet());
 // ids first so even a helmet/CORS-level rejection is correlatable
 app.use(requestId);
 app.use(requestLog);
+app.use(clientContext);
 
 // Test runs only: close every connection after its response. supertest spins
 // up an ephemeral server per request, and socket reuse across those under
@@ -95,6 +100,9 @@ app.use('/api/v1/buddy-invites', buddyInviteRoutes);
 app.use('/api/v1/legal', legalRoutes);
 app.use('/api/v1/push-tokens', pushTokenRoutes);
 app.use('/api/v1/plan', planRoutes);
+app.use('/api/v1/client', clientRoutes);
+app.use('/api/v1/partner', partnerRoutes);
+app.use('/api/v1/admin/partners', adminPartnerRoutes);
 
 // --- Tail: unmatched routes, then the global error handler -----------------
 app.use(notFoundHandler);

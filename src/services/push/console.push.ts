@@ -1,4 +1,9 @@
-import type { Pusher, PushMessage, PushResult } from './push.interface';
+import type {
+  DataPushMessage,
+  Pusher,
+  PushMessage,
+  PushResult,
+} from './push.interface';
 
 /** Development driver: prints the notification instead of delivering it. */
 class ConsolePusher implements Pusher {
@@ -11,6 +16,18 @@ class ConsolePusher implements Pusher {
         `body:   ${message.body}`,
         ...(message.data ? [`data:   ${JSON.stringify(message.data)}`] : []),
         '-----------------------------',
+      ].join('\n'),
+    );
+    return { invalidTokens: [] };
+  }
+
+  async sendData(message: DataPushMessage): Promise<PushResult> {
+    console.log(
+      [
+        '--- DATA PUSH (console driver) ---',
+        `tokens: ${message.tokens.length}`,
+        `data:   ${JSON.stringify(message.data)}`,
+        '----------------------------------',
       ].join('\n'),
     );
     return { invalidTokens: [] };

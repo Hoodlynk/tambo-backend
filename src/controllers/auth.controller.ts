@@ -67,6 +67,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     req.body as LoginInput,
     userAgentOf(req),
     req.ip,
+    req.client,
   );
   // a challenge means the mailbox was never proven - verify completes login
   if (isChallenge(result)) sendChallenge(res, result);
@@ -129,6 +130,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       code,
       userAgentOf(req),
       req.ip,
+      req.client,
     ),
   );
 };
@@ -145,7 +147,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
   const { refreshToken } = req.body as { refreshToken: string };
   sendAuthResult(
     res,
-    await sessionService.refresh(refreshToken, userAgentOf(req)),
+    await sessionService.refresh(refreshToken, userAgentOf(req), req.client),
   );
 };
 
@@ -215,6 +217,7 @@ export const resetPassword = async (
       req.body as ResetPasswordInput,
       userAgentOf(req),
       req.ip,
+      req.client,
     ),
   );
 };

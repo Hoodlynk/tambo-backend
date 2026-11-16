@@ -13,6 +13,7 @@ import { lastKnownLocation, mapsLink } from './evidenceLocation';
 import * as familiarLocationService from './familiarLocation.service';
 import type { MailMessage } from './mailer';
 import * as notifier from './notifier.service';
+import * as partnerService from './partner.service';
 import type { PushContent } from './notifier.service';
 import { buildPack, getOwnedEpisode } from './pack.service';
 import { logger } from '../utils/logger';
@@ -107,11 +108,80 @@ const claimAndPush = async (
   userId: string,
   content: PushContent,
 ): Promise<boolean> => {
-  const tokens = await pushTokenService.activeTokensForUser(userId);
+  // never the stolen phone itself: a lock-screen "may be stolen" banner
+  // tells the thief exactly when to pull the SIM
+  const tokens = await pushTokenService.activeTokensForUser(userId, {
+    excludeDevice: episode.device,
+  });
   if (tokens.length === 0) return false; // email-only recipient
   if (!(await claim(episode, kind, userId, 'push'))) return false;
   notifier.sendPushToTokens(userId, tokens, content);
   return true;
+};
+
+/** IMEIs, make/model and last known location: what police and operators need. */
+const deviceEssentials = (
+  device: IDevice,
+  known: Awaited<ReturnType<typeof lastKnownLocation>>,
+  familiarNote = '',
+): string =>
+  [
+    `Device: ${device.make} ${device.deviceModel} ("${device.name}")`,
+    `IMEI${device.imeis.length > 1 ? 's' : ''}: ${device.imeis.join(', ')}`,
+    known
+      ? `Last known location: ${known.location.lat}, ${known.location.lng}` +
+        (known.location.accuracyM ? ` (±${known.location.accuracyM}m)` : '') +
+        familiarNote +
+        ` at ${known.at.toISOString()} - ${mapsLink(known.location)}`
+      : 'Last known location: not yet reported.',
+  ].join('\n');
+
+/**
+ * An episode on a partner phone nobody has linked yet (B4): the partner's
+ * alert recipients are the only people who can act, so they get the first
+ * alert, deduped per address like the owner's. Email only - recipients are
+ * mailboxes, not Tambo users. With no recipients configured nobody is told,
+ * which is logged so the gap is visible.
+ */
+const sendPartnerFirstAlert = async (
+  episode: ITheftEpisode,
+  device: IDevice,
+): Promise<void> => {
+  const fleet = device.partner
+    ? await partnerService.alertRecipientsFor(device.partner)
+    : null;
+  if (!fleet || fleet.recipients.length === 0) {
+    logger.warn(
+      { episode: episode._id.toString(), device: device._id.toString() },
+      'ownerless episode opened with no partner alert recipients',
+    );
+    return;
+  }
+
+  const subject = `Tambo alert: unlinked ${fleet.partner.name} device may be stolen`;
+  const text = [
+    `At ${episode.openedAt.toISOString()}, a ${fleet.partner.name} device ` +
+      'that has not been linked to an owner yet was flagged as possibly ' +
+      'stolen after repeated failed unlock attempts.',
+    '',
+    deviceEssentials(device, await lastKnownLocation(device._id)),
+    device.serial ? `Serial: ${device.serial}` : '',
+    `Tambo device id: ${device._id.toString()}`,
+    '',
+    'The phone keeps uploading evidence. It cannot be linked to an account ' +
+      'while the episode is open; if this is a false alarm, resolve it with ' +
+      `POST /api/v1/partner/devices/${device._id.toString()}/mark-recovered.`,
+  ]
+    .filter((line, index, lines) => line !== '' || lines[index - 1] !== '')
+    .join('\n');
+
+  for (const recipient of fleet.recipients) {
+    await claimAndSend(episode, 'first_alert', recipient.email, {
+      to: recipient.email,
+      subject,
+      text: recipient.name ? `Hi ${recipient.name},\n\n${text}` : text,
+    });
+  }
 };
 
 /**
@@ -123,6 +193,10 @@ export const sendFirstAlert = async (
   episode: ITheftEpisode,
   device: IDevice,
 ): Promise<void> => {
+  if (!episode.user) {
+    await sendPartnerFirstAlert(episode, device);
+    return;
+  }
   const owner = await User.findById(episode.user);
   if (!owner) return;
 
@@ -146,18 +220,13 @@ export const sendFirstAlert = async (
         known.location,
       )
     : null;
-  const essentials = [
-    `Device: ${device.make} ${device.deviceModel} ("${device.name}")`,
-    `IMEI${device.imeis.length > 1 ? 's' : ''}: ${device.imeis.join(', ')}`,
-    known
-      ? `Last known location: ${known.location.lat}, ${known.location.lng}` +
-        (known.location.accuracyM ? ` (±${known.location.accuracyM}m)` : '') +
-        (familiar
-          ? ` - near familiar location "${familiar.label}" (~${familiar.distanceM}m from its centre)`
-          : '') +
-        ` at ${known.at.toISOString()} - ${mapsLink(known.location)}`
-      : 'Last known location: not yet reported.',
-  ].join('\n');
+  const essentials = deviceEssentials(
+    device,
+    known,
+    familiar
+      ? ` - near familiar location "${familiar.label}" (~${familiar.distanceM}m from its centre)`
+      : '',
+  );
 
   const bodyFor = (recipientName: string, isOwner: boolean): string =>
     [

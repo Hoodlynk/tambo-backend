@@ -28,7 +28,8 @@ export type DeliveryChannel = (typeof DELIVERY_CHANNELS)[number];
  */
 export interface IPackDelivery extends Document<Types.ObjectId> {
   _id: Types.ObjectId;
-  user: Types.ObjectId;
+  /** Absent for alerts about an ownerless partner phone (B4). */
+  user?: Types.ObjectId;
   episode: Types.ObjectId;
   kind: DeliveryKind;
   recipient: string;
@@ -40,7 +41,7 @@ export interface IPackDelivery extends Document<Types.ObjectId> {
 
 const packDeliverySchema = new Schema<IPackDelivery>(
   {
-    user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    user: { type: Schema.Types.ObjectId, ref: 'User' },
     episode: {
       type: Schema.Types.ObjectId,
       ref: 'TheftEpisode',

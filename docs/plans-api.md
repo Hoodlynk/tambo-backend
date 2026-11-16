@@ -44,7 +44,7 @@ a safety/privacy policy, not a plan perk. The API reports it as
 
 ```
 GET /api/v1/plan                       (Bearer)
-→ 200 { "plan": { "plan", "effectivePlan", "expiresAt",
+→ 200 { "plan": { "plan", "effectivePlan", "expiresAt", "source",
                   "entitlements": { maxDevices, historyDays, trailCadenceSeconds, pushAlerts,
                                     snapshotPolicy: { framesPerCamera, intervalSeconds, maxBurstsPerEpisode } } } }
 ```
@@ -53,11 +53,17 @@ Backs the Settings "Subscription" row. Branch on `effectivePlan`.
 
 ```
 PATCH /api/v1/plan/:userId             (Bearer, admin role)
-{ "plan": "free" | "pro" | "family", "expiresAt"?: "<ISO>" }
+{ "plan": "free" | "pro" | "family", "expiresAt"?: "<ISO>", "source"?: "self" | "partner" }
 → 200 { plan }  |  403 forbidden  |  404 user_not_found
 ```
 
 Downgrading to free (or omitting `expiresAt`) clears the expiry.
+
+`source` records who pays and defaults to `self`. A signup under a partner
+that has a `defaultPlan` gets `source: "partner"`
+([partners-api.md](partners-api.md)). **The Play Billing webhook must leave
+alone any account whose plan source is `partner` while that plan is in
+force.**
 
 ## Client-visible effects elsewhere
 

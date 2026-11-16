@@ -1,15 +1,58 @@
 # Build plan & status
 
 The single source of truth for where the backend is and what comes next.
-Last updated: 2026-11-13.
+Last updated: 2026-11-15.
 
 **Active program (approved 2026-11-13)**: [program-2026-11.md](program-2026-11.md),
-backend sessions B1 snapshots (✅) → B2 remote commands → B3 partner tenancy +
-white-label config + launch handshake → B4 OEM provisioning and device-first
-enrolment → B5 partner webhooks + status cards, then the app repo restructure
-for iOS (M0-M6, run in that repo). Scoping records:
+backend sessions B1 snapshots (✅) → B2 remote commands (✅) → B3 partner tenancy +
+white-label config + launch handshake (✅) → B4 OEM provisioning and device-first
+enrolment (✅) → B5 partner webhooks + status cards (✅). **Next: the app repo restructure
+for iOS (M0-M6, run in that repo).** Scoping records:
 [oem-zero-screen-readiness.md](oem-zero-screen-readiness.md),
 [white-label-scoping.md](white-label-scoping.md).
+
+### ✅ B5: partner webhooks and status cards (2026-11-15)
+- **Webhooks.** Partners manage their own endpoints with their API key:
+  `POST/GET /partner/webhooks`, `DELETE /partner/webhooks/:id`,
+  `POST .../rotate-secret`, `POST .../ping`, `GET .../deliveries`. At most 5
+  per partner; the signing secret is shown once. Events: `device.claimed`
+  (first claim only), `episode.opened`, `episode.resolved`,
+  `snapshot.received` (once per burst during an episode, across batches).
+  `Tambo-Signature: t=..,v1=<HMAC-SHA256 of "t.body">`, Stripe-style.
+  Delivery is queued per endpoint with the body frozen, deduped by a unique
+  (endpoint, event key) index, sent at once and retried 8 times over ~45 h
+  by a 30 s sweep; an atomic claim stops the send and the sweep sending one
+  attempt twice. Payloads are minimal: no owner identity, device name,
+  location or photos; IMEIs only on partner-provisioned phones.
+- **SSRF guard.** https only; private, loopback, link-local, CGNAT and
+  multicast targets refused inside the socket's own DNS lookup (no
+  rebinding), IP literals checked up front, redirects not followed.
+  `WEBHOOK_ALLOW_LOCAL_TARGETS=true` (dev/test) relaxes it and refuses to
+  boot anywhere else.
+- **Status card.** `GET /devices/:id/status-card` (owner): `protected |
+  stolen | paused`, last seen, unlock attempts, and during an episode its
+  bursts, pending commands and a last location limited to the episode's
+  evidence. `GET /evidence/status` (device token, 120/h): `protected |
+  unlinked` and the brand only, **never** the episode, because whoever holds
+  the phone then is presumably the thief.
+- **Partner device read** (deferred from B4): `GET /partner/devices/:id`.
+
+448 tests (+52). Contracts: [webhooks-api.md](webhooks-api.md),
+[status-card-api.md](status-card-api.md).
+
+**Deferred, filed here instead of TODOs:**
+- **Encrypt webhook secrets at rest.** HMAC needs the secret itself, so it
+  is stored as-is (unselected, never serialized). Needs a key-management
+  decision alongside the hosting region.
+- **Auto-disable a dead endpoint** after a run of failed deliveries, with a
+  notice to the partner's `alertRecipients`; and a manual redeliver.
+- **A partner integration guide** (key issue, provisioning, webhooks, client
+  config) for the readiness checklist, once a first partner is named.
+
+**Open owner decisions:** should partners receive events for phones a
+*person* enrolled under their code (today: yes, minimal payload), or only
+for phones they provisioned? Should insurers get the IMEIs of those phones
+(today: no)? Both belong in the data processing agreement (W7).
 
 ### ✅ F4 — camera snapshot bursts (2026-11-13, session B1)
 PHOTO envelopes are frames of a burst (`burstId`, `seq`, `count`, `camera`,
@@ -25,11 +68,117 @@ embedded per set), media limit 300/h. 294 tests. Design and platform limits:
 overlay-permission spike on Transsion + Samsung) is the app repo's next native
 unit; iOS never gets snapshots.**
 
-### ⬜ B2 — remote commands (next)
-Owner-triggered `snapshot | locate | ring` while an episode is open:
-`DeviceCommand` queue, `pendingCommands` on ingest responses, a device-token
-poll, FCM data message to a device-scoped push token; results arrive as
-envelopes with `commandId`.
+### ✅ B2 — remote commands (2026-11-13)
+Owner-triggered `snapshot | locate | ring`, **only while an episode is
+open**: `POST/GET /devices/:id/commands`, `POST
+/devices/:id/commands/:commandId/cancel` (idempotent). A repeated type
+converges on the outstanding command. Lifetimes are 30 min snapshot/locate
+and 5 min ring; `expired` is derived from the clock, never stored. Resolving
+the episode cancels whatever is outstanding; device removal deletes them.
+Delivery is at-least-once: `pendingCommands` on ingest replies, `GET
+/evidence/commands` (device token, 360/h), and a silent high-priority FCM
+data message to the device-bound install. Answers are ordinary envelopes with
+`commandId` in the payload: the first result completes the command, `{
+outcome: "failed", reason }` fails it, and a command id belonging to another
+device is ignored. The verified link is a `commandId` column on the envelope.
+`POST /evidence/push-token` (device token) binds an install to its device.
+
+The same unit fixed two push-registry issues it exposed:
+- **The stolen phone no longer receives the alert about itself.** First
+  alerts and pack nudges skip the install bound to the episode's device.
+- **Sign-out and credential rotation keep wake-ups.** A new `alerts` flag on
+  push tokens means device-bound installs get alerts switched off instead of
+  being deleted, so changing the password right after a theft does not cut
+  off remote commands. A device register never turns alerts on.
+
+334 tests (+40). Contract: [commands-api.md](commands-api.md).
+**Open owner decisions:** should remote commands be plan-gated (they are not
+today)? Should the owner get a push when a command completes? Should the
+pack list the owner's commands next to their answers?
+
+### ✅ B4: OEM provisioning and device-first enrolment (2026-11-13)
+- **Provision.** `POST /api/v1/partner/devices` (partner key) takes up to
+  500 handsets and returns one single-use provisioning token per phone,
+  stored hashed. A partner never provisions a handset twice: a unique
+  partial index on (partner, IMEI) for provisioned rows. A re-run reissues
+  an unclaimed handset's token or reports it `claimed`.
+- **Claim.** `POST /api/v1/devices/claim` (no auth, 30/h per IP) trades the
+  token for an ingest token. The claiming `installId` is bound (hashed), so
+  the same install can retry a lost response until the phone is linked and
+  any other install gets 409. `CLAIM_INTEGRITY=off|required` puts Play
+  Integrity behind a flag through a verifier seam. `required` refuses to boot
+  outside dev/test until the real verifier exists.
+- **Link.** `POST /api/v1/devices/:id/link` needs the Bearer session **and**
+  the phone's `X-Device-Token`. It is legal-gated, counts against
+  `maxDevices`, is idempotent per account, and is refused while an episode is
+  open. The owner inherits the phone's episodes and evidence.
+- **`Device.user` optional.** The model requires `partner` when `user` is
+  absent; `user` is optional on episodes, envelopes and delivery rows. Every
+  reader is handled and tested: ingest stores ownerless evidence, and its
+  advice follows the partner's `defaultPlan`. An ownerless episode emails the
+  partner's `alertRecipients` (deduped per address, logged when there are
+  none). Device push registration answers `409 device_not_linked`. Owner
+  routes 404, and trail/snapshot builders skip familiar places with no
+  owner. The partner resolves an ownerless episode with
+  `POST /partner/devices/:id/mark-recovered`; a linked phone is the owner's.
+
+396 tests (+33). Contract: [provisioning-api.md](provisioning-api.md).
+
+**Deferred, filed here instead of TODOs:**
+- **The production Play Integrity verifier** (Google decode, package name,
+  request hash, `MEETS_DEVICE_INTEGRITY`) behind `src/services/integrity/`.
+- ~~A partner device read~~: landed in B5 (`GET /partner/devices/:id`).
+- **Push to partner recipients** and an in-app partner console. Ownerless
+  alerts are email-only today.
+- **Unlink / transfer** of a partner phone between owners (resale, BNPL
+  repossession).
+
+**Open owner decisions:** does linking a partner phone grant the partner's
+`defaultPlan` (and set `user.partner`) when the account has none? Today it
+changes neither. Should provisioning tokens expire?
+
+### ✅ B3: partner tenancy, white-label config, launch handshake (2026-11-13)
+- **Partners.** `Partner` records carry a code, a type
+  (`oem|insurer|telco|enterprise|bnpl`), a status, a brand (name, logo,
+  colour pair, support links), feature flags (buddies, plans, familiar
+  locations; never evidence), a `defaultPlan` and `alertRecipients`. Admin
+  CRUD lives at `/api/v1/admin/partners`.
+- **Partner API keys.** Keys are `tpk_…`, shown once, stored as a SHA-256
+  hash plus a prefix. Revocation is idempotent and is recorded in the
+  admin's security trail. Keys work only on `/api/v1/partner/*` (`GET
+  /partner/me`, 600/h per key).
+- **Launch handshake.** `GET /api/v1/client/config?platform=&partner=` is
+  public and cacheable for 5 minutes, limited to 1200/h per IP because of
+  carrier NAT. It returns the per-platform version policy from
+  `CLIENT_MIN_VERSION_*` / `CLIENT_RECOMMENDED_VERSION_*`, plus an `update`
+  verdict against `X-Client-Version` (compared numerically; a bad value
+  refuses to boot). It also returns the partner's brand or Tambo's, and the
+  flags. An unknown code returns 404. A suspended partner keeps its branding
+  but loses signups and keys.
+- **`partnerCode`** is accepted at register (joins the partner and grants
+  its default plan with `planSource: partner`) and at device enrolment
+  (otherwise the device inherits the owner's partner). Unknown and suspended
+  codes both return `400 unknown_partner`.
+- **`planSource`** is exposed on `GET /plan` and settable by the admin.
+- **Client headers.** `X-Client-Platform` and `X-Client-Version` are read on
+  every request (advisory, never rejected) and recorded on sessions.
+  Refresh updates them or inherits the previous values.
+
+363 tests (+25). Contract: [partners-api.md](partners-api.md).
+
+**Deferred, filed here instead of TODOs:**
+- **Per-partner legal documents.** Overriding `brand.legal` needs
+  per-partner versions in `legal.service` and the enrolment gate.
+- **Server-side enforcement of partner feature flags.** Today they shape
+  the UI only.
+- **An expiry or seat end date for partner-granted plans**, plus the Play
+  Billing guard that skips `planSource: partner`. The rule is documented in
+  plans-api.md.
+- **A seeded demo partner** in `seed:dev` for app-side theming work.
+
+**Open owner decisions:** W1-W7 in
+[white-label-scoping.md](white-label-scoping.md). W6, the first design
+partner, matters most before B4.
 
 **Active program (approved 2026-09-13)**: depth-first client-readiness &
 completion plan — Phase 0 API contract (✅) → 1 PWA cookie auth (✅) →

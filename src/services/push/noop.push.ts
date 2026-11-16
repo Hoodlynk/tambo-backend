@@ -1,4 +1,9 @@
-import type { Pusher, PushMessage, PushResult } from './push.interface';
+import type {
+  DataPushMessage,
+  Pusher,
+  PushMessage,
+  PushResult,
+} from './push.interface';
 
 /**
  * Test driver: records what would have been sent, delivers nothing. Tests can
@@ -6,20 +11,30 @@ import type { Pusher, PushMessage, PushResult } from './push.interface';
  */
 class NoopPusher implements Pusher {
   public readonly sent: PushMessage[] = [];
+  /** Silent data messages, kept apart so alert assertions stay exact. */
+  public readonly sentData: DataPushMessage[] = [];
   /** Tokens the next send() reports as dead (then clears). */
   public failNext: string[] = [];
 
   async send(message: PushMessage): Promise<PushResult> {
     this.sent.push(message);
-    const invalidTokens = this.failNext.filter((token) =>
-      message.tokens.includes(token),
-    );
+    return { invalidTokens: this.takeFailures(message.tokens) };
+  }
+
+  async sendData(message: DataPushMessage): Promise<PushResult> {
+    this.sentData.push(message);
+    return { invalidTokens: this.takeFailures(message.tokens) };
+  }
+
+  private takeFailures(tokens: string[]): string[] {
+    const invalid = this.failNext.filter((token) => tokens.includes(token));
     this.failNext = [];
-    return { invalidTokens };
+    return invalid;
   }
 
   clear(): void {
     this.sent.length = 0;
+    this.sentData.length = 0;
     this.failNext = [];
   }
 }

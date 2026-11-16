@@ -7,6 +7,10 @@ export type UserRole = (typeof USER_ROLES)[number];
 export const USER_PLANS = ['free', 'pro', 'family'] as const;
 export type UserPlan = (typeof USER_PLANS)[number];
 
+/** Who pays: a partner-granted plan must never be overwritten by store billing. */
+export const PLAN_SOURCES = ['self', 'partner'] as const;
+export type PlanSource = (typeof PLAN_SOURCES)[number];
+
 export interface IUser extends Document<Types.ObjectId> {
   _id: Types.ObjectId;
   name: string;
@@ -25,6 +29,9 @@ export interface IUser extends Document<Types.ObjectId> {
    */
   plan: UserPlan;
   planExpiresAt?: Date;
+  planSource: PlanSource;
+  /** The white-label partner the account signed up under (B3). */
+  partner?: Types.ObjectId;
   emailVerifiedAt?: Date;
   phoneVerifiedAt?: Date;
   /**
@@ -61,6 +68,8 @@ const userSchema = new Schema<IUser>(
     role: { type: String, enum: USER_ROLES, default: 'user' },
     plan: { type: String, enum: USER_PLANS, default: 'free' },
     planExpiresAt: { type: Date },
+    planSource: { type: String, enum: PLAN_SOURCES, default: 'self' },
+    partner: { type: Schema.Types.ObjectId, ref: 'Partner', index: true },
     emailVerifiedAt: { type: Date },
     phoneVerifiedAt: { type: Date },
     sessionsInvalidatedAt: { type: Date },

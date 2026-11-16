@@ -11,14 +11,28 @@ Enrols a phone. IMEIs are owner-entered (Android 10+ blocks reading them).
 
 ```json
 { "name": "My Tecno", "imeis": ["356938035643809"], "make": "Tecno",
-  "deviceModel": "Spark 20", "colour": "black", "purchaseInfo": "..." }
+  "deviceModel": "Spark 20", "colour": "black", "purchaseInfo": "...",
+  "partnerCode": "acme" }
 ```
+
+`partnerCode` is optional and enrols the phone into that partner's fleet. If
+it is omitted, the device inherits the owner's partner. An unknown or
+suspended code returns `400 unknown_partner`. The partner is fixed at
+enrolment ([partners-api.md](partners-api.md)).
 
 `201` → `{ device, ingestToken }`. **`ingestToken` appears in this response and
 never again** — store it on the phone; only its hash is kept server-side. It is
 the device's evidence-upload credential (header `X-Device-Token`, F-B): valid
 even after the owner's sessions are revoked, and useless for anything but
 ingest if it leaks.
+
+### Partner-provisioned phones (B4)
+A phone can also arrive **without an owner**. A partner provisions it, the
+phone claims its own ingest token (`POST /devices/claim`), and a person
+links it later (`POST /devices/:id/link`, Bearer **and** the phone's
+`X-Device-Token`). Until it is linked, the device has no `user`, owner
+routes answer 404 for it, and episodes alert the partner's recipients. The
+full contract is in [provisioning-api.md](provisioning-api.md).
 
 ### GET /devices 🔒 · GET /devices/:id 🔒 · PATCH /devices/:id 🔒 · DELETE /devices/:id 🔒
 Standard management. Reads/writes are owner-scoped; someone else's device id
@@ -136,9 +150,25 @@ Invitations to an email that is not yet a Tambo account **auto-bind** the moment
 that person registers with it (email ownership proven by the signup OTP) and
 then appear in their buddy-invites.
 
+## Remote commands (B2)
+
+While an episode is open the owner can ask the phone to snapshot, locate or
+ring: `POST /devices/:id/commands`, `GET /devices/:id/commands`, `POST
+/devices/:id/commands/:commandId/cancel`. Resolving the episode cancels
+whatever is outstanding. Contract: [commands-api.md](commands-api.md).
+
+## Status card (B5)
+
+`GET /devices/:id/status-card` 🔒 is the widget's view of one phone:
+`protected | stolen | paused`, last seen, failed unlocks in the window, and
+during an episode its bursts, pending commands and last location. The phone's
+own discreet card is `GET /evidence/status`. Contract:
+[status-card-api.md](status-card-api.md).
+
 ## Removal caveat
 
-Deleting a device removes its (resolved) episodes; the evidence envelopes age
+Deleting a device removes its (resolved) episodes and remote commands, and
+unbinds its push token; the evidence envelopes age
 out on their normal TTL and past packs can no longer be rebuilt. If an
 insurer dispute may still need an old incident, export the pack (JSON + PDF)
 before removing the device. An archival redesign is on the roadmap.
@@ -148,6 +178,8 @@ before removing the device. An archival redesign is on the roadmap.
 | Code | Status |
 |---|---|
 | `buddy_limit_reached`, `buddy_is_self` | 400 |
-| `missing_device_token`, `invalid_device_token` | 401 |
-| `device_not_found`, `episode_not_found`, `buddy_not_found`, `invite_not_found` | 404 |
-| `episode_open`, `buddy_exists` | 409 |
+| `integrity_required` | 400 |
+| `missing_device_token`, `invalid_device_token`, `invalid_provisioning_token` | 401 |
+| `integrity_failed` | 403 |
+| `device_not_found`, `episode_not_found`, `buddy_not_found`, `invite_not_found`, `command_not_found` | 404 |
+| `episode_open`, `buddy_exists`, `episode_not_open`, `device_token_revoked`, `device_already_claimed`, `device_already_linked`, `device_linked`, `device_not_linked` | 409 |

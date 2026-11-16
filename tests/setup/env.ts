@@ -21,3 +21,5 @@ process.env.MAIL_DRIVER = 'noop';
 process.env.RATE_LIMIT_ENABLED = 'false';
 process.env.JWT_ACCESS_SECRET = 'test-secret-not-used-anywhere-real';
 process.env.BCRYPT_ROUNDS = '4'; // keep the suite fast; production uses 12
+// the webhook suite delivers to a receiver on 127.0.0.1
+process.env.WEBHOOK_ALLOW_LOCAL_TARGETS = 'true';

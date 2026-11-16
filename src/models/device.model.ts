@@ -18,7 +18,8 @@ export type DeviceStatus = (typeof DEVICE_STATUSES)[number];
  */
 export interface IDevice extends Document<Types.ObjectId> {
   _id: Types.ObjectId;
-  user: Types.ObjectId;
+  /** Absent on a provisioned phone nobody has linked yet (B4). */
+  user?: Types.ObjectId;
   name: string;
   imeis: string[];
   make: string;
@@ -34,6 +35,23 @@ export interface IDevice extends Document<Types.ObjectId> {
    */
   failedUnlockThreshold: number;
   ingestTokenHash?: string;
+  /** The partner fleet this phone belongs to, when enrolled under one. */
+  partner?: Types.ObjectId;
+  /** Partner-supplied hardware serial, when the factory has one. */
+  serial?: string;
+  /** Set when a partner provisioned the phone rather than an owner enrolling it. */
+  provisionedAt?: Date;
+  /** The one-shot claim credential a provisioned phone presents (hashed). */
+  provisioningTokenHash?: string;
+  /** When the phone claimed its ingest token. */
+  claimedAt?: Date;
+  /**
+   * The app install that claimed (hashed). A claim whose response was lost
+   * may be retried by the SAME install; any other install is refused.
+   */
+  claimInstallIdHash?: string;
+  /** When a person linked the phone to their account. */
+  linkedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -43,8 +61,11 @@ const deviceSchema = new Schema<IDevice>(
     user: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
       index: true,
+      // nobody answers for an ownerless phone unless a partner does
+      required: function (this: IDevice) {
+        return !this.partner;
+      },
     },
     name: { type: String, required: true, trim: true },
     imeis: { type: [String], required: true },
@@ -54,6 +75,17 @@ const deviceSchema = new Schema<IDevice>(
     purchaseInfo: { type: String, trim: true },
     status: { type: String, enum: DEVICE_STATUSES, default: 'active' },
     failedUnlockThreshold: { type: Number, default: 3, min: 1, max: 10 },
+    partner: { type: Schema.Types.ObjectId, ref: 'Partner', index: true },
+    serial: { type: String, trim: true },
+    provisionedAt: { type: Date },
+    provisioningTokenHash: {
+      type: String,
+      select: false,
+      index: { unique: true, sparse: true },
+    },
+    claimedAt: { type: Date },
+    claimInstallIdHash: { type: String, select: false },
+    linkedAt: { type: Date },
     // never selected by default; the ingest-auth middleware queries BY hash
     ingestTokenHash: {
       type: String,
@@ -67,9 +99,22 @@ const deviceSchema = new Schema<IDevice>(
       versionKey: false,
       transform: (_doc, ret: Record<string, unknown>) => {
         delete ret.ingestTokenHash;
+        delete ret.provisioningTokenHash;
+        delete ret.claimInstallIdHash;
         return ret;
       },
     },
+  },
+);
+
+// a partner never provisions the same handset twice: a factory re-run
+// reissues the existing row's token instead (multikey, so any shared IMEI
+// collides). Owner-entered IMEIs are not unique and stay out of it.
+deviceSchema.index(
+  { partner: 1, imeis: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { provisionedAt: { $exists: true } },
   },
 );
 

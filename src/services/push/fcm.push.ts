@@ -1,4 +1,9 @@
-import type { Pusher, PushMessage, PushResult } from './push.interface';
+import type {
+  DataPushMessage,
+  Pusher,
+  PushMessage,
+  PushResult,
+} from './push.interface';
 import config from '../../config/config';
 import { logger } from '../../utils/logger';
 
@@ -41,6 +46,29 @@ const firebase = (): FirebaseAdmin => {
   return admin;
 };
 
+type MulticastResponse = Awaited<
+  ReturnType<ReturnType<FirebaseAdmin['messaging']>['sendEachForMulticast']>
+>;
+
+/** Splits a multicast response into dead tokens (returned) and logged failures. */
+const deadTokens = (
+  tokens: string[],
+  response: MulticastResponse,
+): string[] => {
+  const invalidTokens: string[] = [];
+  response.responses.forEach((result, index) => {
+    const code = result.error?.code;
+    const token = tokens[index];
+    if (code && token && DEAD_TOKEN_CODES.has(code)) {
+      invalidTokens.push(token);
+    } else if (result.error) {
+      // transient (quota, unavailable): keep the token, log the failure
+      logger.error({ err: result.error, fcmCode: code }, 'FCM send failed');
+    }
+  });
+  return invalidTokens;
+};
+
 class FcmPusher implements Pusher {
   async send(message: PushMessage): Promise<PushResult> {
     if (message.tokens.length === 0) return { invalidTokens: [] };
@@ -53,19 +81,28 @@ class FcmPusher implements Pusher {
         ...(message.data ? { data: message.data } : {}),
       });
 
-    const invalidTokens: string[] = [];
-    response.responses.forEach((result, index) => {
-      const code = result.error?.code;
-      const token = message.tokens[index];
-      if (code && token && DEAD_TOKEN_CODES.has(code)) {
-        invalidTokens.push(token);
-      } else if (result.error) {
-        // transient (quota, unavailable): keep the token, log the failure
-        logger.error({ err: result.error, fcmCode: code }, 'FCM send failed');
-      }
-    });
+    return { invalidTokens: deadTokens(message.tokens, response) };
+  }
 
-    return { invalidTokens };
+  async sendData(message: DataPushMessage): Promise<PushResult> {
+    if (message.tokens.length === 0) return { invalidTokens: [] };
+
+    // high priority is what gets a data message through Android Doze to a
+    // phone in a thief's pocket; on iOS it is a background (content-
+    // available) push, which APNs requires to be sent at priority 5
+    const response = await firebase()
+      .messaging()
+      .sendEachForMulticast({
+        tokens: message.tokens,
+        data: message.data,
+        android: { priority: 'high' },
+        apns: {
+          headers: { 'apns-push-type': 'background', 'apns-priority': '5' },
+          payload: { aps: { contentAvailable: true } },
+        },
+      });
+
+    return { invalidTokens: deadTokens(message.tokens, response) };
   }
 }
 

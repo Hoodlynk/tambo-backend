@@ -83,10 +83,9 @@ reads are owner-only, and alert pushes never carry a photo. The lawful basis
 wording restricting publication of intruder photos are owner actions tracked
 in [oem-zero-screen-readiness.md](oem-zero-screen-readiness.md).
 
-## Next (B2 in the program)
+## Owner-requested bursts (B2, built)
 
-Owner-triggered bursts while an episode is open: a `DeviceCommand` queue
-(`snapshot | locate | ring`) delivered as `pendingCommands` on ingest
-responses, a device-token poll, and an FCM data message to a device-scoped
-push token; results arrive as ordinary envelopes with `trigger:
-"owner_request"` and a `commandId`.
+The owner can ask for a burst while an episode is open: a `snapshot` command
+(optionally naming `cameras`), answered with PHOTO envelopes carrying
+`trigger: "owner_request"` and the `commandId`. See
+[commands-api.md](commands-api.md).

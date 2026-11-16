@@ -156,7 +156,9 @@ const operationFor = (endpoint: Endpoint): Record<string, unknown> => {
       ? { security: [{ bearerAuth: [] }] }
       : endpoint.auth === 'device'
         ? { security: [{ deviceToken: [] }] }
-        : { security: [] }),
+        : endpoint.auth === 'partnerKey'
+          ? { security: [{ partnerApiKey: [] }] }
+          : { security: [] }),
   };
 };
 
@@ -207,6 +209,29 @@ export const buildOpenApiDocument = (): Record<string, unknown> => {
       { name: 'Plan' },
       { name: 'Familiar locations' },
       { name: 'Legal' },
+      {
+        name: 'Client',
+        description:
+          'Every request from a current client carries X-Client-Platform ' +
+          '(android | ios | web) and X-Client-Version (X.Y.Z). Both are ' +
+          'advisory: recorded on sessions, never required.',
+      },
+      {
+        name: 'Partners',
+        description:
+          'White-label partners: the admin catalogue, and partner systems ' +
+          'authenticating with X-Api-Key.',
+      },
+      {
+        name: 'Webhooks',
+        description:
+          'Partner endpoints hearing about their fleet. Each POST carries ' +
+          'Tambo-Event-Id, Tambo-Event-Type and Tambo-Signature: ' +
+          't=<unix seconds>,v1=<hex HMAC-SHA256 of "<t>.<raw body>" keyed ' +
+          'with the endpoint secret>. Any 2xx acknowledges; anything else ' +
+          'is retried (8 attempts over ~45 h). Delivery is at-least-once: ' +
+          'dedup on the event id. Redirects are not followed.',
+      },
     ],
     paths,
     components: {
@@ -224,6 +249,12 @@ export const buildOpenApiDocument = (): Record<string, unknown> => {
           in: 'header',
           name: 'X-Device-Token',
           description: 'The ingest token issued at device registration.',
+        },
+        partnerApiKey: {
+          type: 'apiKey',
+          in: 'header',
+          name: 'X-Api-Key',
+          description: 'A partner API key issued by a Tambo admin.',
         },
       },
       schemas: {

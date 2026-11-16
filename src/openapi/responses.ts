@@ -1,12 +1,20 @@
 import { z } from 'zod';
 import { AUTH_EVENT_TYPES } from '../models/authEvent.model';
 import {
+  COMMAND_CAMERAS,
+  COMMAND_STATUSES,
+  COMMAND_TYPES,
+} from '../models/deviceCommand.model';
+import {
   SNAPSHOT_CAMERAS,
   SNAPSHOT_TRIGGERS,
 } from '../models/evidenceEnvelope.model';
 import { OTP_PURPOSES } from '../models/otpChallenge.model';
+import { PARTNER_STATUSES, PARTNER_TYPES } from '../models/partner.model';
+import { WEBHOOK_EVENTS } from '../models/partnerWebhook.model';
+import { CLIENT_PLATFORMS } from '../config/client';
 import { PUSH_PLATFORMS } from '../models/pushToken.model';
-import { USER_PLANS } from '../models/user.model';
+import { PLAN_SOURCES, USER_PLANS } from '../models/user.model';
 
 /**
  * Response-body schemas for the OpenAPI document. Requests are described by
@@ -50,6 +58,9 @@ export const user = z.looseObject({
   email: z.string().optional(),
   phone: z.string().optional(),
   role: z.enum(['user', 'admin']),
+  partner: objectId
+    .optional()
+    .describe('The white-label partner the account signed up under.'),
   emailVerifiedAt: isoDate.optional(),
   phoneVerifiedAt: isoDate.optional(),
   createdAt: isoDate,
@@ -95,6 +106,14 @@ export const sessionsResponse = z.object({
     z.object({
       id: objectId,
       userAgent: z.string().nullable(),
+      clientPlatform: z
+        .enum(CLIENT_PLATFORMS)
+        .nullable()
+        .describe('From X-Client-Platform; null when never sent.'),
+      clientVersion: z
+        .string()
+        .nullable()
+        .describe('From X-Client-Version; updated on every refresh.'),
       createdAt: isoDate,
       expiresAt: isoDate,
       current: z
@@ -120,7 +139,9 @@ export const securityEventsResponse = z.object({
 
 export const device = z.looseObject({
   _id: objectId,
-  user: objectId,
+  user: objectId
+    .optional()
+    .describe('Absent on a provisioned phone nobody has linked yet.'),
   name: z.string(),
   imeis: z.array(z.string()),
   make: z.string(),
@@ -129,6 +150,19 @@ export const device = z.looseObject({
   purchaseInfo: z.string().optional(),
   failedUnlockThreshold: z.number(),
   status: z.enum(['active', 'stolen']),
+  partner: objectId
+    .optional()
+    .describe('The partner fleet the phone was enrolled under.'),
+  serial: z.string().optional().describe('Partner-supplied hardware serial.'),
+  provisionedAt: isoDate
+    .optional()
+    .describe('Set when a partner provisioned the phone.'),
+  claimedAt: isoDate
+    .optional()
+    .describe('When the provisioned phone claimed its ingest token.'),
+  linkedAt: isoDate
+    .optional()
+    .describe('When a person linked the provisioned phone to their account.'),
   createdAt: isoDate,
   updatedAt: isoDate,
 });
@@ -181,7 +215,9 @@ export const activityResponse = z.object({
 
 export const episode = z.looseObject({
   _id: objectId,
-  user: objectId,
+  user: objectId
+    .optional()
+    .describe('Absent while the device has no owner (partner-provisioned).'),
   device: objectId,
   status: z.enum(['open', 'resolved']),
   openedBy: z.enum(['owner', 'device']),
@@ -323,6 +359,60 @@ export const packSendResponse = z.object({
   recipients: z.array(z.string()).describe('Email addresses the pack went to.'),
 });
 
+// --- Remote commands (B2) -----------------------------------------------------------
+
+export const deviceCommand = z
+  .looseObject({
+    id: objectId.describe('Dedup on this: delivery is at-least-once.'),
+    type: z.enum(COMMAND_TYPES),
+    params: z.looseObject({
+      cameras: z
+        .array(z.enum(COMMAND_CAMERAS))
+        .optional()
+        .describe('snapshot: the cameras to fire.'),
+      durationSeconds: z
+        .number()
+        .optional()
+        .describe('ring: how long to ring.'),
+    }),
+    issuedAt: isoDate,
+    expiresAt: isoDate.describe('Do not act on the command after this.'),
+  })
+  .describe(
+    'A command as the device sees it. Answer with evidence envelopes whose ' +
+      'payload carries "commandId" (and "outcome": "failed" plus "reason" ' +
+      'when it could not be done).',
+  );
+
+export const ownerCommand = deviceCommand
+  .extend({
+    deviceId: objectId,
+    episodeId: objectId,
+    status: z
+      .enum([...COMMAND_STATUSES, 'expired'])
+      .describe(
+        'pending -> delivered -> completed | failed; cancelled by the owner ' +
+          'or when the episode resolves; expired once past expiresAt unanswered.',
+      ),
+    resultCount: z
+      .number()
+      .describe('Answering envelopes received (a snapshot sends several).'),
+    deliveredAt: isoDate.optional(),
+    completedAt: isoDate.optional(),
+    failedAt: isoDate.optional(),
+    failureReason: z.string().optional(),
+    cancelledAt: isoDate.optional(),
+  })
+  .describe('A command as the owner sees it, with where it got to.');
+
+export const commandResponse = z.object({ command: ownerCommand });
+export const commandsResponse = z.object({ commands: z.array(ownerCommand) });
+export const deviceCommandsResponse = z.object({
+  commands: z
+    .array(deviceCommand)
+    .describe('Outstanding commands, oldest first; empty when none.'),
+});
+
 // --- Evidence ingest (device-token auth) -----------------------------------------
 
 export const ingestResponse = z.object({
@@ -348,6 +438,13 @@ export const ingestResponse = z.object({
         "owner's plan. Advice only - evidence is never refused.",
     ),
   snapshotPolicy: snapshotPolicy.optional(),
+  pendingCommands: z
+    .array(deviceCommand)
+    .optional()
+    .describe(
+      'Outstanding remote commands, oldest first; absent when none. Re-sent ' +
+        'until answered - dedup on id.',
+    ),
 });
 
 export const mediaAckResponse = z.object({
@@ -425,6 +522,11 @@ export const planResponse = z.object({
       'What is in force NOW (lapsed paid = free).',
     ),
     expiresAt: isoDate.nullable(),
+    source: z
+      .enum(PLAN_SOURCES)
+      .describe(
+        '"partner" = paid for by a white-label partner; store billing never overwrites it.',
+      ),
     entitlements: z.object({
       maxDevices: z.number(),
       historyDays: z
@@ -485,4 +587,255 @@ export const healthResponse = z.object({
   database: z.string(),
   uptime: z.number(),
   timestamp: isoDate,
+});
+
+// --- Partners and the launch handshake (B3) ------------------------------------
+
+const hexColor = z.string().regex(/^#[0-9A-F]{6}$/);
+
+const partnerFeatures = z.object({
+  buddies: z.boolean(),
+  plans: z.boolean(),
+  familiarLocations: z.boolean(),
+});
+
+export const partnerSummary = z.object({
+  code: z.string(),
+  name: z.string(),
+  type: z.enum(PARTNER_TYPES),
+});
+
+export const partner = z.looseObject({
+  _id: objectId,
+  code: z.string(),
+  name: z.string(),
+  type: z.enum(PARTNER_TYPES),
+  status: z.enum(PARTNER_STATUSES),
+  brand: z.looseObject({
+    displayName: z.string(),
+    logoUrl: z.string().optional(),
+    colors: z.object({ primary: hexColor, onPrimary: hexColor }),
+    supportUrl: z.string().optional(),
+    supportEmail: z.string().optional(),
+  }),
+  features: partnerFeatures,
+  defaultPlan: z.enum(USER_PLANS).optional(),
+  alertRecipients: z.array(
+    z.object({ email: z.string(), name: z.string().optional() }),
+  ),
+  createdAt: isoDate,
+  updatedAt: isoDate,
+});
+
+export const partnerResponse = z.object({ partner });
+export const partnersResponse = z.object({ partners: z.array(partner) });
+export const partnerSummaryResponse = z.object({ partner: partnerSummary });
+
+export const provisionResponse = z.object({
+  devices: z.array(
+    z.object({
+      deviceId: objectId,
+      imeis: z.array(z.string()),
+      serial: z.string().nullable(),
+      status: z
+        .enum(['provisioned', 'reissued', 'claimed'])
+        .describe(
+          'provisioned: new. reissued: already provisioned and not yet ' +
+            'claimed, so a fresh token replaces the old one. claimed: the ' +
+            'phone already holds its ingest token; no token is returned.',
+        ),
+      provisioningToken: z
+        .string()
+        .optional()
+        .describe('Shown ONCE; only its hash is stored. Single use.'),
+    }),
+  ),
+});
+
+const partnerKey = z.object({
+  id: objectId,
+  name: z.string(),
+  prefix: z.string().describe('The first characters, to tell keys apart.'),
+  createdAt: isoDate,
+  lastUsedAt: isoDate.nullable(),
+  revokedAt: isoDate.nullable(),
+});
+
+export const partnerKeyIssuedResponse = z.object({
+  key: partnerKey,
+  apiKey: z
+    .string()
+    .describe('Shown ONCE; only its hash is stored. Send as X-Api-Key.'),
+});
+export const partnerKeysResponse = z.object({ keys: z.array(partnerKey) });
+
+export const clientConfigResponse = z.object({
+  config: z.object({
+    platform: z.enum(CLIENT_PLATFORMS),
+    versions: z.object({
+      minimum: z.string(),
+      recommended: z.string(),
+      update: z
+        .enum(['required', 'recommended', 'none', 'unknown'])
+        .describe(
+          'Against X-Client-Version: "required" = block until updated; ' +
+            '"unknown" = the header was not sent.',
+        ),
+    }),
+    partner: partnerSummary.nullable(),
+    brand: z.object({
+      displayName: z.string(),
+      logoUrl: z.string().nullable(),
+      colors: z.object({ primary: hexColor, onPrimary: hexColor }),
+      supportUrl: z.string().nullable(),
+      supportEmail: z.string().nullable(),
+    }),
+    features: partnerFeatures.describe(
+      'Optional features this build should show. Evidence is never optional.',
+    ),
+  }),
+});
+
+// --- Partner webhooks, partner device read, status cards (B5) ------------------
+
+const webhook = z.object({
+  id: objectId,
+  url: z.string(),
+  events: z.array(z.enum(WEBHOOK_EVENTS)),
+  secretPrefix: z
+    .string()
+    .describe(
+      'The first characters of the signing secret, to tell them apart.',
+    ),
+  createdAt: isoDate,
+});
+
+const webhookSecret = z
+  .string()
+  .describe(
+    'The signing secret (whsec_...). Shown ONCE, here and on rotation; ' +
+      'verify Tambo-Signature with it.',
+  );
+
+export const webhookCreatedResponse = z.object({
+  webhook,
+  secret: webhookSecret,
+});
+export const webhooksResponse = z.object({ webhooks: z.array(webhook) });
+
+const webhookDelivery = z.object({
+  id: objectId,
+  eventId: z.string().describe('Also sent as Tambo-Event-Id; dedup on it.'),
+  type: z.enum([...WEBHOOK_EVENTS, 'ping']),
+  status: z
+    .enum(['pending', 'delivered', 'failed'])
+    .describe('failed: every retry was used up (8 attempts over ~45 h).'),
+  attempts: z.number(),
+  lastStatusCode: z.number().nullable(),
+  lastError: z
+    .string()
+    .nullable()
+    .describe(
+      'http_<status>, timeout, address_blocked, https_required, or a ' +
+        'network error code.',
+    ),
+  nextAttemptAt: isoDate.nullable(),
+  deliveredAt: isoDate.nullable(),
+  createdAt: isoDate,
+});
+
+export const webhookDeliveryResponse = z.object({ delivery: webhookDelivery });
+export const webhookDeliveriesResponse = z.object({
+  deliveries: z.array(webhookDelivery).describe('Newest first, at most 50.'),
+});
+
+export const partnerDevice = z.object({
+  id: objectId,
+  imeis: z
+    .array(z.string())
+    .nullable()
+    .describe(
+      'Only for phones this partner provisioned; null on a phone a person ' +
+        "enrolled under the partner's code.",
+    ),
+  serial: z.string().nullable(),
+  make: z.string(),
+  deviceModel: z.string(),
+  status: z.enum(['active', 'stolen']),
+  provisioned: z.boolean(),
+  claimedAt: isoDate.nullable(),
+  linked: z.boolean().describe('Whether a person has linked the phone.'),
+  linkedAt: isoDate.nullable(),
+});
+
+export const partnerDeviceResponse = z.object({
+  device: partnerDevice,
+  openEpisode: z
+    .object({ id: objectId, openedAt: isoDate, openedBy: z.string() })
+    .nullable(),
+});
+
+const cardBrand = z.object({
+  displayName: z.string(),
+  logoUrl: z.string().nullable(),
+  colors: z.object({ primary: hexColor, onPrimary: hexColor }),
+  supportUrl: z.string().nullable(),
+  supportEmail: z.string().nullable(),
+});
+
+export const ownerStatusCardResponse = z.object({
+  card: z.object({
+    deviceId: objectId,
+    deviceName: z.string(),
+    state: z
+      .enum(['protected', 'stolen', 'paused'])
+      .describe(
+        'stolen: an episode is open. paused: the ingest token was revoked, ' +
+          'so the phone sends no evidence.',
+      ),
+    brand: cardBrand,
+    lastSeenAt: isoDate
+      .nullable()
+      .describe("Server receipt time of the phone's latest evidence."),
+    unlockAttempts: z.object({
+      inWindow: z.number(),
+      threshold: z.number(),
+    }),
+    episode: z
+      .object({
+        id: objectId,
+        openedAt: isoDate,
+        openedBy: z.enum(['owner', 'device']),
+        snapshotBursts: z.number(),
+        pendingCommands: z.number(),
+        lastLocation: z
+          .object({
+            lat: z.number(),
+            lng: z.number(),
+            accuracyM: z.number().optional(),
+            at: isoDate,
+          })
+          .nullable()
+          .describe('Only from evidence around this episode.'),
+      })
+      .nullable(),
+    refreshAfterSeconds: z.number(),
+    generatedAt: isoDate,
+  }),
+});
+
+export const deviceStatusCardResponse = z.object({
+  card: z.object({
+    deviceId: objectId,
+    deviceName: z.string(),
+    state: z
+      .enum(['protected', 'unlinked'])
+      .describe(
+        'Never reveals an open episode: whoever holds the phone during one ' +
+          'is presumably the thief. unlinked: nobody has signed in yet.',
+      ),
+    brand: cardBrand,
+    refreshAfterSeconds: z.number(),
+    generatedAt: isoDate,
+  }),
 });

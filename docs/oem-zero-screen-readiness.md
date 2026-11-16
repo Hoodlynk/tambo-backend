@@ -37,9 +37,9 @@ can prepare now from what only the owner can obtain.
 
 ## Readiness checklist (tick as each lands)
 
-- [ ] B3 partner tenancy and client config
-- [ ] B4 device-first enrolment and provisioning API
-- [ ] B5 status endpoints and webhooks
+- [x] B3 partner tenancy and client config
+- [x] B4 device-first enrolment and provisioning API ([provisioning-api.md](provisioning-api.md))
+- [x] B5 status endpoints and webhooks ([webhooks-api.md](webhooks-api.md), [status-card-api.md](status-card-api.md))
 - [ ] M3 App Widget with the status card
 - [ ] A system-app build flavour that installs and boots on a factory image
 - [ ] Partner integration guide (API key issue, provisioning, webhooks, config)

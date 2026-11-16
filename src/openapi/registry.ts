@@ -18,6 +18,10 @@ import {
   inviteActionSchema,
 } from '../validation/buddy.schema';
 import {
+  commandCreateSchema,
+  commandParamsSchema,
+} from '../validation/command.schema';
+import {
   deviceIdSchema,
   deviceSchema,
   deviceUpdateSchema,
@@ -36,7 +40,24 @@ import {
   familiarLocationUpdateSchema,
 } from '../validation/familiarLocation.schema';
 import { legalAcceptSchema } from '../validation/legal.schema';
+import {
+  clientConfigQuerySchema,
+  partnerCreateSchema,
+  partnerIdSchema,
+  partnerKeyCreateSchema,
+  partnerKeyParamsSchema,
+  partnerUpdateSchema,
+} from '../validation/partner.schema';
+import {
+  claimSchema,
+  linkSchema,
+  provisionSchema,
+} from '../validation/provisioning.schema';
 import { planSetSchema, planUserIdSchema } from '../validation/plan.schema';
+import {
+  webhookCreateSchema,
+  webhookIdSchema,
+} from '../validation/webhook.schema';
 import {
   pushTokenRegisterSchema,
   pushTokenUnregisterSchema,
@@ -74,7 +95,7 @@ export interface Endpoint {
   summary: string;
   description?: string;
   /** Absent = public. */
-  auth?: 'bearer' | 'device';
+  auth?: 'bearer' | 'device' | 'partnerKey';
   request?: {
     body?: ZodType;
     /** Overrides application/json (e.g. application/octet-stream). */
@@ -111,6 +132,31 @@ const deviceUnauthorized: EndpointError = {
   code: 'invalid_device_token',
   description:
     'Revoked or unknown X-Device-Token (code "missing_device_token" when absent).',
+};
+
+const partnerKeyUnauthorized: EndpointError = {
+  status: 401,
+  code: 'invalid_api_key',
+  description:
+    'Unknown or revoked X-Api-Key, or the partner is suspended (code ' +
+    '"missing_api_key" when absent).',
+};
+const adminOnly: EndpointError = {
+  status: 403,
+  code: 'forbidden',
+  description: 'Not an admin.',
+};
+const partnerNotFound: EndpointError = {
+  status: 404,
+  code: 'partner_not_found',
+};
+
+const clientVersionHeader = {
+  name: 'X-Client-Version',
+  description:
+    'The app build as X.Y.Z. Sent on every request by current clients ' +
+    '(with X-Client-Platform); here it decides versions.update.',
+  required: false,
 };
 
 const deviceTokenHeader = {
@@ -153,7 +199,9 @@ export const endpoints: Endpoint[] = [
     summary: 'Start a signup (always answers with an OTP challenge)',
     description:
       'No session exists until the emailed 6-digit code is verified at ' +
-      '/auth/otp/verify. The mailbox must be proven.',
+      '/auth/otp/verify. The mailbox must be proven. A white-label build ' +
+      'passes `partnerCode`; the account joins that partner and receives ' +
+      "the partner's default plan, if it has one.",
     request: { body: registerSchema },
     responses: [
       {
@@ -164,6 +212,11 @@ export const endpoints: Endpoint[] = [
     ],
     errors: [
       validationError,
+      {
+        status: 400,
+        code: 'unknown_partner',
+        description: 'partnerCode is unknown or the partner is suspended.',
+      },
       { status: 409, code: 'email_taken' },
       rateLimited,
     ],
@@ -589,7 +642,8 @@ export const endpoints: Endpoint[] = [
     summary: 'Enrol a device (returns its one-shot ingest token)',
     description:
       'Gated on current T&C + privacy acceptance. The ingestToken appears in ' +
-      'this response and never again - only its hash is stored.',
+      'this response and never again - only its hash is stored. The device ' +
+      "joins `partnerCode`'s fleet, or the owner's partner when omitted.",
     auth: 'bearer',
     request: { body: deviceSchema },
     responses: [
@@ -603,6 +657,11 @@ export const endpoints: Endpoint[] = [
       unauthorized,
       validationError,
       {
+        status: 400,
+        code: 'unknown_partner',
+        description: 'partnerCode is unknown or the partner is suspended.',
+      },
+      {
         status: 403,
         code: 'legal_acceptance_required',
         description:
@@ -615,6 +674,123 @@ export const endpoints: Endpoint[] = [
           "The plan's device allowance is used up (free/pro: 1, family: 5). " +
           'Already-enrolled devices keep working regardless.',
       },
+    ],
+  },
+  {
+    method: 'post',
+    path: '/api/v1/devices/claim',
+    tag: 'Devices',
+    summary: 'A provisioned phone claims its ingest token (no account)',
+    description:
+      'Device-first enrolment (docs/provisioning-api.md). The phone trades ' +
+      'the provisioning token its partner gave it for an ingest token and ' +
+      'starts protecting before anyone signs in. `installId` is a random id ' +
+      'the app keeps per install: the same install may retry a claim whose ' +
+      'response was lost (200, the ingest token rotates) until the phone is ' +
+      'linked; any other install gets 409. When the server enforces Play ' +
+      'Integrity, `integrityToken` is required and its request hash must be ' +
+      'sha256("tambo-claim:<provisioningToken>:<installId>") in hex.',
+    request: { body: claimSchema },
+    responses: [
+      {
+        status: 201,
+        description: 'Claimed. The ingest token is shown once.',
+        schema: r.deviceWithTokenResponse,
+      },
+      {
+        status: 200,
+        description: 'The same install retried; a fresh ingest token.',
+        schema: r.deviceWithTokenResponse,
+      },
+    ],
+    errors: [
+      validationError,
+      {
+        status: 400,
+        code: 'integrity_required',
+        description: 'The server enforces Play Integrity and none was sent.',
+      },
+      {
+        status: 401,
+        code: 'invalid_provisioning_token',
+        description: 'Unknown token, or the partner is suspended.',
+      },
+      {
+        status: 403,
+        code: 'integrity_failed',
+        description: 'The Play Integrity verdict was refused.',
+      },
+      {
+        status: 409,
+        code: 'device_already_claimed',
+        description:
+          'Another install claimed this phone, or it is already linked.',
+      },
+      rateLimited,
+    ],
+  },
+  {
+    method: 'post',
+    path: '/api/v1/devices/{id}/link',
+    tag: 'Devices',
+    summary: 'Link a provisioned phone to the signed-in account',
+    description:
+      'Needs BOTH the Bearer session (who) and the X-Device-Token of the ' +
+      'phone being linked (proof of holding it). The account inherits the ' +
+      "phone's history. Idempotent for the same account. Gated on current " +
+      "T&C + privacy acceptance, and counted against the plan's device " +
+      'allowance, like enrolment.',
+    auth: 'bearer',
+    request: {
+      params: deviceIdSchema,
+      body: linkSchema,
+      headers: [
+        {
+          ...deviceTokenHeader,
+          description: 'The ingest token the phone received when it claimed.',
+        },
+      ],
+    },
+    responses: [
+      { status: 200, description: 'Linked.', schema: r.deviceResponse },
+    ],
+    errors: [
+      unauthorized,
+      validationError,
+      {
+        status: 401,
+        code: 'invalid_device_token',
+        description:
+          'Revoked or unknown X-Device-Token ("missing_device_token" when absent).',
+      },
+      {
+        status: 403,
+        code: 'legal_acceptance_required',
+        description:
+          'Accept the current terms + privacy first (see /api/v1/legal).',
+      },
+      {
+        status: 404,
+        code: 'device_not_found',
+        description: 'Unknown id, or the device token is for another phone.',
+      },
+      {
+        status: 409,
+        code: 'device_already_linked',
+        description: 'The phone belongs to another account.',
+      },
+      {
+        status: 409,
+        code: 'episode_open',
+        description:
+          'The phone has an open theft episode; its partner resolves it first.',
+      },
+      {
+        status: 409,
+        code: 'device_limit',
+        description: "The plan's device allowance is used up.",
+      },
+      rateLimited,
     ],
   },
   {
@@ -645,6 +821,26 @@ export const endpoints: Endpoint[] = [
     request: { params: deviceIdSchema },
     responses: [
       { status: 200, description: 'OK.', schema: r.activityResponse },
+    ],
+    errors: [unauthorized, { status: 404, code: 'device_not_found' }],
+  },
+  {
+    method: 'get',
+    path: '/api/v1/devices/{id}/status-card',
+    tag: 'Devices',
+    summary: "The owner's status card for one phone (widget data)",
+    description:
+      'Everything a widget or Zero-screen card shows about this phone, ' +
+      'including an open episode and, from evidence around it, where the ' +
+      'phone was last seen. Sent with Cache-Control: no-store.',
+    auth: 'bearer',
+    request: { params: deviceIdSchema },
+    responses: [
+      {
+        status: 200,
+        description: 'OK.',
+        schema: r.ownerStatusCardResponse,
+      },
     ],
     errors: [unauthorized, { status: 404, code: 'device_not_found' }],
   },
@@ -748,6 +944,80 @@ export const endpoints: Endpoint[] = [
       unauthorized,
       { status: 404, code: 'device_not_found' },
       { status: 404, code: 'episode_not_found' },
+    ],
+  },
+
+  // --- Remote commands (B2) ---------------------------------------------------------------
+  {
+    method: 'post',
+    path: '/api/v1/devices/{id}/commands',
+    tag: 'Commands',
+    summary: 'Ask the stolen phone to snapshot, locate, or ring',
+    description:
+      'Only while the device has an open episode. The phone is woken by a ' +
+      'silent push when it has a device-scoped push token, and otherwise ' +
+      'picks the command up on its next poll or ingest reply. Repeating a ' +
+      'type that is still outstanding converges on it (200) instead of ' +
+      'queueing another. cameras applies to snapshot only, durationSeconds ' +
+      'to ring only.',
+    auth: 'bearer',
+    request: { params: deviceIdSchema, body: commandCreateSchema },
+    responses: [
+      {
+        status: 201,
+        description: 'Issued.',
+        schema: r.commandResponse,
+      },
+      {
+        status: 200,
+        description: 'Converged on the outstanding command of this type.',
+        schema: r.commandResponse,
+      },
+    ],
+    errors: [
+      unauthorized,
+      validationError,
+      { status: 404, code: 'device_not_found' },
+      {
+        status: 409,
+        code: 'episode_not_open',
+        description: 'Commands need an open episode (mark the device stolen).',
+      },
+      {
+        status: 409,
+        code: 'device_token_revoked',
+        description: 'The device has no ingest token, so it cannot poll.',
+      },
+      rateLimited,
+    ],
+  },
+  {
+    method: 'get',
+    path: '/api/v1/devices/{id}/commands',
+    tag: 'Commands',
+    summary: "A device's recent commands and where each got to (newest first)",
+    auth: 'bearer',
+    request: { params: deviceIdSchema },
+    responses: [
+      { status: 200, description: 'OK.', schema: r.commandsResponse },
+    ],
+    errors: [unauthorized, { status: 404, code: 'device_not_found' }],
+  },
+  {
+    method: 'post',
+    path: '/api/v1/devices/{id}/commands/{commandId}/cancel',
+    tag: 'Commands',
+    summary: 'Cancel an outstanding command (idempotent)',
+    description:
+      'A command that already finished, or was already cancelled, is ' +
+      'returned unchanged.',
+    auth: 'bearer',
+    request: { params: commandParamsSchema },
+    responses: [{ status: 200, description: 'OK.', schema: r.commandResponse }],
+    errors: [
+      unauthorized,
+      { status: 404, code: 'device_not_found' },
+      { status: 404, code: 'command_not_found' },
     ],
   },
 
@@ -890,7 +1160,8 @@ export const endpoints: Endpoint[] = [
       'per-envelope rejections: read the ACK list; retry only failures. An ' +
       'ingest response carrying episodeId/episodeOpened is the cue to start ' +
       'the location-trail fan-out and the camera bursts; trailCadenceSeconds ' +
-      'and snapshotPolicy are the advisory cadence for each.',
+      'and snapshotPolicy are the advisory cadence for each. pendingCommands ' +
+      'lists outstanding remote commands (same shape as GET /evidence/commands).',
     auth: 'device',
     request: {
       body: ingestSchema,
@@ -950,6 +1221,76 @@ export const endpoints: Endpoint[] = [
         description: 'Envelope already has DIFFERENT media attached.',
       },
       { status: 413, code: 'payload_too_large' },
+      rateLimited,
+    ],
+  },
+
+  {
+    method: 'get',
+    path: '/api/v1/evidence/commands',
+    tag: 'Commands',
+    summary: 'The device polls for outstanding remote commands',
+    description:
+      'Authenticates as a DEVICE via X-Device-Token. Call on a ' +
+      'device_command wake-up push, and on the trail timer while an episode ' +
+      'is open. Commands are re-sent until answered, cancelled, or expired; ' +
+      'dedup on id and ignore any past expiresAt.',
+    auth: 'device',
+    request: { headers: [deviceTokenHeader] },
+    responses: [
+      { status: 200, description: 'OK.', schema: r.deviceCommandsResponse },
+    ],
+    errors: [deviceUnauthorized, rateLimited],
+  },
+  {
+    method: 'get',
+    path: '/api/v1/evidence/status',
+    tag: 'Evidence',
+    summary: "The phone's own status card, for its widget (device token)",
+    description:
+      'Discreet by design: never reveals an open episode, the failed-unlock ' +
+      'count or a location, since whoever holds the phone during an episode ' +
+      'is presumably the thief. Refresh every refreshAfterSeconds.',
+    auth: 'device',
+    request: { headers: [deviceTokenHeader] },
+    responses: [
+      {
+        status: 200,
+        description: 'OK.',
+        schema: r.deviceStatusCardResponse,
+      },
+    ],
+    errors: [deviceUnauthorized, rateLimited],
+  },
+  {
+    method: 'post',
+    path: '/api/v1/evidence/push-token',
+    tag: 'Push',
+    summary: 'The protected phone registers its push token (device token)',
+    description:
+      'Binds the FCM token to this enrolled device so remote commands can ' +
+      'wake it, and so theft alerts about this device skip it. Call on ' +
+      'every app start and on FCM token rotation; it keeps working after ' +
+      "the owner's sessions are revoked. The token still receives the " +
+      "owner's other alerts.",
+    auth: 'device',
+    request: {
+      body: pushTokenRegisterSchema,
+      headers: [deviceTokenHeader],
+    },
+    responses: [
+      { status: 200, description: 'Registered.', schema: r.pushTokenResponse },
+    ],
+    errors: [
+      deviceUnauthorized,
+      validationError,
+      {
+        status: 409,
+        code: 'device_not_linked',
+        description:
+          'A provisioned phone nobody has linked yet has no account to ' +
+          'register under; link it first.',
+      },
       rateLimited,
     ],
   },
@@ -1208,6 +1549,339 @@ export const endpoints: Endpoint[] = [
         code: 'stale_legal_version',
         description: 'The document changed while it was on screen; reload it.',
       },
+    ],
+  },
+  // --- Client launch handshake (B3) ---------------------------------------------------------
+  {
+    method: 'get',
+    path: '/api/v1/client/config',
+    tag: 'Client',
+    summary: 'Launch handshake: update policy, brand theme, feature flags',
+    description:
+      'Call at app start, before sign-in. A white-label build passes its ' +
+      'partner code; an unbranded build omits it and gets Tambo. Cacheable ' +
+      'for 5 minutes. A suspended partner keeps its brand for phones in the ' +
+      'field.',
+    request: { query: clientConfigQuerySchema, headers: [clientVersionHeader] },
+    responses: [
+      { status: 200, description: 'OK.', schema: r.clientConfigResponse },
+    ],
+    errors: [
+      validationError,
+      {
+        status: 404,
+        code: 'unknown_partner',
+        description: 'No partner has that code: a misbuilt branded app.',
+      },
+      rateLimited,
+    ],
+  },
+
+  // --- Partner systems (X-Api-Key) ------------------------------------------------------------
+  {
+    method: 'get',
+    path: '/api/v1/partner/me',
+    tag: 'Partners',
+    summary: 'Which partner this API key belongs to (integration check)',
+    auth: 'partnerKey',
+    responses: [
+      { status: 200, description: 'OK.', schema: r.partnerSummaryResponse },
+    ],
+    errors: [partnerKeyUnauthorized, rateLimited],
+  },
+
+  {
+    method: 'post',
+    path: '/api/v1/partner/devices',
+    tag: 'Partners',
+    summary: 'Provision handsets in bulk; one single-use token per phone',
+    description:
+      'Device-first enrolment (docs/provisioning-api.md). Up to 500 handsets ' +
+      'per call; one result per row, in order. Re-provisioning a handset ' +
+      'this partner already has (any shared IMEI) never creates a second ' +
+      'device: before the claim it reissues the token, after it it reports ' +
+      '`claimed`.',
+    auth: 'partnerKey',
+    request: { body: provisionSchema },
+    responses: [
+      { status: 200, description: 'OK.', schema: r.provisionResponse },
+    ],
+    errors: [partnerKeyUnauthorized, validationError, rateLimited],
+  },
+  {
+    method: 'get',
+    path: '/api/v1/partner/devices/{id}',
+    tag: 'Partners',
+    summary: "One of the partner's phones: claimed, linked, open episode",
+    description:
+      'Any phone in the fleet, provisioned or enrolled under the partner ' +
+      'code. The same device shape webhooks carry: no owner identity, no ' +
+      'location, IMEIs only for phones the partner provisioned.',
+    auth: 'partnerKey',
+    request: { params: deviceIdSchema },
+    responses: [
+      { status: 200, description: 'OK.', schema: r.partnerDeviceResponse },
+    ],
+    errors: [
+      partnerKeyUnauthorized,
+      {
+        status: 404,
+        code: 'device_not_found',
+        description: "Unknown id, or not this partner's device.",
+      },
+      rateLimited,
+    ],
+  },
+  {
+    method: 'post',
+    path: '/api/v1/partner/devices/{id}/mark-recovered',
+    tag: 'Partners',
+    summary: "Resolve an episode on one of the partner's unlinked phones",
+    description:
+      'For a phone nobody has linked yet: a false alarm in the shop, or the ' +
+      "handset is back in stock. A linked phone is its owner's to resolve.",
+    auth: 'partnerKey',
+    request: { params: deviceIdSchema },
+    responses: [
+      { status: 200, description: 'Resolved.', schema: r.episodeResponse },
+    ],
+    errors: [
+      partnerKeyUnauthorized,
+      {
+        status: 404,
+        code: 'device_not_found',
+        description: "Unknown id, or not this partner's device.",
+      },
+      {
+        status: 404,
+        code: 'episode_not_found',
+        description: 'No open episode.',
+      },
+      {
+        status: 409,
+        code: 'device_linked',
+        description: 'The phone has an owner; only they can resolve it.',
+      },
+      rateLimited,
+    ],
+  },
+
+  // --- Partner webhooks (X-Api-Key) -----------------------------------------------------------
+  {
+    method: 'post',
+    path: '/api/v1/partner/webhooks',
+    tag: 'Webhooks',
+    summary: 'Register an endpoint; the signing secret is shown once',
+    description:
+      'https only. `events` defaults to every event that exists today; ' +
+      'events added later are opt-in. At most 5 endpoints per partner.',
+    auth: 'partnerKey',
+    request: { body: webhookCreateSchema },
+    responses: [
+      {
+        status: 201,
+        description: 'Created.',
+        schema: r.webhookCreatedResponse,
+      },
+    ],
+    errors: [
+      partnerKeyUnauthorized,
+      validationError,
+      {
+        status: 409,
+        code: 'webhook_limit',
+        description: 'The partner already has 5 endpoints.',
+      },
+      rateLimited,
+    ],
+  },
+  {
+    method: 'get',
+    path: '/api/v1/partner/webhooks',
+    tag: 'Webhooks',
+    summary: "The partner's endpoints, oldest first",
+    auth: 'partnerKey',
+    responses: [
+      { status: 200, description: 'OK.', schema: r.webhooksResponse },
+    ],
+    errors: [partnerKeyUnauthorized, rateLimited],
+  },
+  {
+    method: 'delete',
+    path: '/api/v1/partner/webhooks/{id}',
+    tag: 'Webhooks',
+    summary: 'Remove an endpoint, with its queue and delivery log',
+    auth: 'partnerKey',
+    request: { params: webhookIdSchema },
+    responses: [{ status: 204, description: 'Removed.' }],
+    errors: [
+      partnerKeyUnauthorized,
+      { status: 404, code: 'webhook_not_found' },
+      rateLimited,
+    ],
+  },
+  {
+    method: 'post',
+    path: '/api/v1/partner/webhooks/{id}/rotate-secret',
+    tag: 'Webhooks',
+    summary: 'Replace the signing secret; the old one stops at once',
+    description: 'Retries still queued are signed with the new secret.',
+    auth: 'partnerKey',
+    request: { params: webhookIdSchema },
+    responses: [
+      {
+        status: 200,
+        description: 'Rotated.',
+        schema: r.webhookCreatedResponse,
+      },
+    ],
+    errors: [
+      partnerKeyUnauthorized,
+      { status: 404, code: 'webhook_not_found' },
+      rateLimited,
+    ],
+  },
+  {
+    method: 'post',
+    path: '/api/v1/partner/webhooks/{id}/ping',
+    tag: 'Webhooks',
+    summary: 'Send a signed ping to one endpoint (integration check)',
+    description:
+      'Queued and sent at once, whatever the endpoint subscribes to. The ' +
+      'delivery log shows the outcome.',
+    auth: 'partnerKey',
+    request: { params: webhookIdSchema },
+    responses: [
+      {
+        status: 202,
+        description: 'Queued.',
+        schema: r.webhookDeliveryResponse,
+      },
+    ],
+    errors: [
+      partnerKeyUnauthorized,
+      { status: 404, code: 'webhook_not_found' },
+      rateLimited,
+    ],
+  },
+  {
+    method: 'get',
+    path: '/api/v1/partner/webhooks/{id}/deliveries',
+    tag: 'Webhooks',
+    summary: "One endpoint's delivery log, newest first",
+    description: 'The last 50 deliveries; the log keeps 30 days.',
+    auth: 'partnerKey',
+    request: { params: webhookIdSchema },
+    responses: [
+      {
+        status: 200,
+        description: 'OK.',
+        schema: r.webhookDeliveriesResponse,
+      },
+    ],
+    errors: [
+      partnerKeyUnauthorized,
+      { status: 404, code: 'webhook_not_found' },
+      rateLimited,
+    ],
+  },
+
+  // --- Admin: partner catalogue -----------------------------------------------------------------
+  {
+    method: 'post',
+    path: '/api/v1/admin/partners',
+    tag: 'Partners',
+    summary: 'Create a white-label partner (admin only)',
+    auth: 'bearer',
+    request: { body: partnerCreateSchema },
+    responses: [
+      { status: 201, description: 'Created.', schema: r.partnerResponse },
+    ],
+    errors: [
+      unauthorized,
+      adminOnly,
+      validationError,
+      { status: 409, code: 'partner_code_taken' },
+    ],
+  },
+  {
+    method: 'get',
+    path: '/api/v1/admin/partners',
+    tag: 'Partners',
+    summary: 'List partners, newest first (admin only)',
+    auth: 'bearer',
+    responses: [
+      { status: 200, description: 'OK.', schema: r.partnersResponse },
+    ],
+    errors: [unauthorized, adminOnly],
+  },
+  {
+    method: 'get',
+    path: '/api/v1/admin/partners/{id}',
+    tag: 'Partners',
+    summary: 'One partner (admin only)',
+    auth: 'bearer',
+    request: { params: partnerIdSchema },
+    responses: [{ status: 200, description: 'OK.', schema: r.partnerResponse }],
+    errors: [unauthorized, adminOnly, partnerNotFound],
+  },
+  {
+    method: 'patch',
+    path: '/api/v1/admin/partners/{id}',
+    tag: 'Partners',
+    summary: 'Update a partner; the code is immutable (admin only)',
+    description:
+      '`features` merges flag by flag; `brand` and `alertRecipients` replace ' +
+      'whole. `defaultPlan: null` stops granting a plan to new signups ' +
+      '(existing accounts keep theirs). `status: "suspended"` stops new ' +
+      'signups and API keys; branding keeps serving.',
+    auth: 'bearer',
+    request: { params: partnerIdSchema, body: partnerUpdateSchema },
+    responses: [
+      { status: 200, description: 'Updated.', schema: r.partnerResponse },
+    ],
+    errors: [unauthorized, adminOnly, validationError, partnerNotFound],
+  },
+  {
+    method: 'post',
+    path: '/api/v1/admin/partners/{id}/keys',
+    tag: 'Partners',
+    summary: 'Issue a partner API key, shown once (admin only)',
+    auth: 'bearer',
+    request: { params: partnerIdSchema, body: partnerKeyCreateSchema },
+    responses: [
+      {
+        status: 201,
+        description: 'Issued.',
+        schema: r.partnerKeyIssuedResponse,
+      },
+    ],
+    errors: [unauthorized, adminOnly, validationError, partnerNotFound],
+  },
+  {
+    method: 'get',
+    path: '/api/v1/admin/partners/{id}/keys',
+    tag: 'Partners',
+    summary: "A partner's API keys, revoked ones included (admin only)",
+    auth: 'bearer',
+    request: { params: partnerIdSchema },
+    responses: [
+      { status: 200, description: 'OK.', schema: r.partnerKeysResponse },
+    ],
+    errors: [unauthorized, adminOnly, partnerNotFound],
+  },
+  {
+    method: 'delete',
+    path: '/api/v1/admin/partners/{id}/keys/{keyId}',
+    tag: 'Partners',
+    summary: 'Revoke a partner API key; idempotent (admin only)',
+    auth: 'bearer',
+    request: { params: partnerKeyParamsSchema },
+    responses: [{ status: 204, description: 'Revoked.' }],
+    errors: [
+      unauthorized,
+      adminOnly,
+      { status: 404, code: 'partner_key_not_found' },
     ],
   },
 ];

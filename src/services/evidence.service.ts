@@ -8,9 +8,16 @@ import { AppError } from '../utils/appError';
 import User from '../models/user.model';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
 import { sha256Hex } from '../utils/tokens';
+import * as deviceCommandService from './deviceCommand.service';
+import type { DeviceCommandView } from './deviceCommand.service';
 import { entitlementsFor } from './entitlements';
-import type { SnapshotPolicy } from './entitlements';
+import type { Entitlements, SnapshotPolicy } from './entitlements';
+import { parseCommandRef } from './evidenceCommand';
+import type { CommandRef } from './evidenceCommand';
 import * as episodeService from './episode.service';
+import * as partnerEvents from './partnerEvents';
+import type { ReceivedBurst } from './partnerEvents';
+import * as partnerService from './partner.service';
 import { parseLocation } from './evidenceLocation';
 import type { EvidenceLocation } from './evidenceLocation';
 import { parseSnapshot } from './evidenceSnapshot';
@@ -48,6 +55,11 @@ export interface IngestResult {
    * owner's plan. Advice on how much to capture; evidence is never refused.
    */
   snapshotPolicy?: SnapshotPolicy;
+  /**
+   * Outstanding remote commands for this device (B2), oldest first; absent
+   * when there are none. Re-sent until answered - the device dedups on id.
+   */
+  pendingCommands?: DeviceCommandView[];
 }
 
 /**
@@ -136,6 +148,20 @@ const maybeOpenByThreshold = async (
   return episode;
 };
 
+/**
+ * The plan the device's capture advice follows: the owner's, or for a phone
+ * nobody has linked yet, the plan its partner grants at signup (B4).
+ */
+const adviceFor = async (device: IDevice): Promise<Entitlements | null> => {
+  if (!device.user) {
+    return entitlementsFor({
+      plan: await partnerService.fleetPlan(device.partner),
+    });
+  }
+  const owner = await User.findById(device.user).select('plan planExpiresAt');
+  return owner ? entitlementsFor(owner) : null;
+};
+
 export const ingestBatch = async (
   device: IDevice,
   envelopes: EnvelopeInput[],
@@ -143,6 +169,20 @@ export const ingestBatch = async (
   let openEpisode = await episodeService.findOpenForDevice(device._id);
   const results: EnvelopeAck[] = [];
   let sawUnlockFailure = false;
+
+  // command answers are resolved for the whole batch up front: one lookup,
+  // and only this device's own commands ever get linked or completed
+  const commandRefs = new Map<string, CommandRef>();
+  for (const input of envelopes) {
+    const ref = parseCommandRef(input.payload);
+    if (ref) commandRefs.set(input.id, ref);
+  }
+  const ownCommands = await deviceCommandService.ownCommandIds(device._id, [
+    ...new Set([...commandRefs.values()].map((ref) => ref.commandId)),
+  ]);
+  const answered: CommandRef[] = [];
+  // first receipts of episode photos, one per burst, for the partner (B5)
+  const bursts = new Map<string, ReceivedBurst>();
 
   for (const input of envelopes) {
     // integrity first: the hash must match the exact bytes sent
@@ -154,6 +194,9 @@ export const ingestBatch = async (
       });
       continue;
     }
+
+    const ref = commandRefs.get(input.id);
+    const answers = ref && ownCommands.has(ref.commandId) ? ref : null;
 
     try {
       await EvidenceEnvelope.create({
@@ -167,10 +210,25 @@ export const ingestBatch = async (
         payload: input.payload,
         sha256: input.sha256.toLowerCase(),
         ...snapshotColumns(input),
+        ...(answers ? { commandId: answers.commandId } : {}),
         expiresAt: openEpisode ? episodeExpiry() : routineExpiry(),
       });
 
       if (input.type === 'UNLOCK_FAILED') sawUnlockFailure = true;
+      // only a first receipt counts: a retried duplicate is not a new result
+      if (answers) answered.push(answers);
+      if (openEpisode && input.type === 'PHOTO') {
+        const meta = parseSnapshot(input.payload);
+        const key = meta.burstId ?? input.id;
+        if (!bursts.has(key)) {
+          bursts.set(key, {
+            key,
+            burstId: meta.burstId,
+            camera: meta.camera,
+            trigger: meta.trigger,
+          });
+        }
+      }
       results.push({ id: input.id, status: 'acked' });
     } catch (error) {
       if (!isDuplicateKeyError(error)) throw error;
@@ -192,6 +250,15 @@ export const ingestBatch = async (
     }
   }
 
+  if (answered.length > 0) {
+    await deviceCommandService.recordResults(device._id, answered);
+  }
+  if (openEpisode && bursts.size > 0) {
+    partnerEvents.snapshotsReceived(device, openEpisode._id, [
+      ...bursts.values(),
+    ]);
+  }
+
   let episodeOpened = false;
   if (!openEpisode && sawUnlockFailure) {
     openEpisode = await maybeOpenByThreshold(device);
@@ -200,11 +267,13 @@ export const ingestBatch = async (
 
   // plan-tuned ADVISORY only ("how often should I ping?"): entitlements shape
   // the client's cadence, never whether evidence is accepted
-  const advice = openEpisode
-    ? await User.findById(device.user)
-        .select('plan planExpiresAt')
-        .then((owner) => (owner ? entitlementsFor(owner) : null))
-    : null;
+  const advice = openEpisode ? await adviceFor(device) : null;
+
+  // commands only exist while an episode is open (and are cancelled when it
+  // resolves), so a routine ingest skips the lookup entirely
+  const pending = openEpisode
+    ? await deviceCommandService.deliverOutstanding(device._id)
+    : [];
 
   return {
     results,
@@ -215,6 +284,9 @@ export const ingestBatch = async (
           trailCadenceSeconds: advice.trailCadenceSeconds,
           snapshotPolicy: advice.snapshotPolicy,
         }
+      : {}),
+    ...(pending.length > 0
+      ? { pendingCommands: pending.map(deviceCommandService.toDeviceView) }
       : {}),
   };
 };

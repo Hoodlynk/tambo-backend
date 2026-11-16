@@ -10,11 +10,12 @@ export const get = async (req: Request, res: Response): Promise<void> => {
 
 export const adminSet = async (req: Request, res: Response): Promise<void> => {
   const { userId } = req.params as { userId: string };
-  const { plan, expiresAt } = req.body as PlanSetInput;
+  const { plan, expiresAt, source } = req.body as PlanSetInput;
   const view = await planService.setPlan(
     userId,
     plan,
     expiresAt ? new Date(expiresAt) : undefined,
+    source,
   );
   res.status(200).json({ plan: view });
 };

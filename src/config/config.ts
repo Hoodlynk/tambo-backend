@@ -1,4 +1,7 @@
 import dotenv from 'dotenv';
+import { CLIENT_PLATFORMS, SEMVER_PATTERN } from './client';
+import type { ClientPlatform } from './client';
+import { compareVersions } from '../utils/version';
 
 dotenv.config();
 
@@ -18,6 +21,9 @@ export type CookieSameSite = (typeof COOKIE_SAMESITE)[number];
 
 const PUSH_DRIVERS = ['console', 'noop', 'fcm'] as const;
 type PushDriver = (typeof PUSH_DRIVERS)[number];
+
+const CLAIM_INTEGRITY_MODES = ['off', 'required'] as const;
+type ClaimIntegrity = (typeof CLAIM_INTEGRITY_MODES)[number];
 
 interface Config {
   port: number;
@@ -113,6 +119,15 @@ interface Config {
     terms: { version: string; url: string };
     privacy: { version: string; url: string };
   };
+  /**
+   * Per-platform app version policy served by GET /client/config. Below
+   * `minimum` the app must update before continuing; below `recommended` it
+   * nudges. 0.0.0 (the default) means "no policy yet".
+   */
+  clientVersions: Record<
+    ClientPlatform,
+    { minimum: string; recommended: string }
+  >;
   cors: {
     /** Empty means "no browser origins allowed" - correct for a mobile-only API. */
     allowedOrigins: string[];
@@ -134,6 +149,22 @@ interface Config {
    * 0 means "no proxy, use the socket address".
    */
   trustProxy: number;
+  /**
+   * Device claim (B4). `required` makes every claim present a Play Integrity
+   * token the verifier accepts; `off` takes the provisioning token alone.
+   */
+  claim: { integrity: ClaimIntegrity };
+  /** Partner webhooks (B5). */
+  webhooks: {
+    /**
+     * Lets endpoints use plain http and private, loopback or link-local
+     * addresses. Development and test only: in production a partner-supplied
+     * URL must never reach the internal network.
+     */
+    allowLocalTargets: boolean;
+    /** Per-attempt timeout for the partner's endpoint. */
+    timeoutMs: number;
+  };
 }
 
 /**
@@ -290,6 +321,73 @@ const parseAuthCookie = (): Config['authCookie'] => {
   };
 };
 
+/**
+ * A typo'd minimum version would either lock every user out or silently
+ * enforce nothing, so a malformed value, or a minimum above the recommended
+ * version, refuses to boot.
+ */
+const parseClientVersions = (): Config['clientVersions'] => {
+  const read = (key: string): string => {
+    const raw = process.env[key];
+    if (raw === undefined || raw === '') return '0.0.0';
+    if (!SEMVER_PATTERN.test(raw)) {
+      throw new Error(`${key} must be a version like 1.4.0; got "${raw}".`);
+    }
+    return raw;
+  };
+  const entries = CLIENT_PLATFORMS.map((platform) => {
+    const suffix = platform.toUpperCase();
+    const minimum = read(`CLIENT_MIN_VERSION_${suffix}`);
+    const recommended = read(`CLIENT_RECOMMENDED_VERSION_${suffix}`);
+    if (compareVersions(minimum, recommended) > 0) {
+      throw new Error(
+        `CLIENT_MIN_VERSION_${suffix} (${minimum}) is above ` +
+          `CLIENT_RECOMMENDED_VERSION_${suffix} (${recommended}).`,
+      );
+    }
+    return [platform, { minimum, recommended }] as const;
+  });
+  return Object.fromEntries(entries) as Config['clientVersions'];
+};
+
+/**
+ * No production Play Integrity verifier exists yet (docs/roadmap.md), and the
+ * placeholder rejects every token - so "required" outside development/test
+ * would refuse every factory phone's claim. That refuses to boot instead.
+ */
+const parseClaimIntegrity = (): ClaimIntegrity => {
+  const raw = process.env.CLAIM_INTEGRITY || 'off';
+  if (!(CLAIM_INTEGRITY_MODES as readonly string[]).includes(raw)) {
+    throw new Error(
+      `CLAIM_INTEGRITY must be one of: ${CLAIM_INTEGRITY_MODES.join(', ')}; got "${raw}".`,
+    );
+  }
+  if (raw === 'required' && !isLocalEnv) {
+    throw new Error(
+      'CLAIM_INTEGRITY=required needs a Play Integrity verifier, and none is ' +
+        'built yet; it would refuse every device claim.',
+    );
+  }
+  return raw as ClaimIntegrity;
+};
+
+/** Mirrors parseClaimIntegrity: an SSRF door must not open by accident. */
+const parseWebhookLocalTargets = (): boolean => {
+  const raw = process.env.WEBHOOK_ALLOW_LOCAL_TARGETS || 'false';
+  if (raw !== 'true' && raw !== 'false') {
+    throw new Error(
+      `WEBHOOK_ALLOW_LOCAL_TARGETS must be true or false; got "${raw}".`,
+    );
+  }
+  if (raw === 'true' && !isLocalEnv) {
+    throw new Error(
+      'WEBHOOK_ALLOW_LOCAL_TARGETS=true lets partner-supplied URLs reach ' +
+        'private addresses; it is allowed only in development and test.',
+    );
+  }
+  return raw === 'true';
+};
+
 const config: Config = {
   port: Number(process.env.PORT) || 3000,
   nodeEnv: rawNodeEnv || 'development',
@@ -355,6 +453,7 @@ const config: Config = {
       url: process.env.PRIVACY_URL || 'https://tambo-app.com/privacy',
     },
   },
+  clientVersions: parseClientVersions(),
   cors: {
     allowedOrigins: (process.env.CORS_ALLOWED_ORIGINS || '')
       .split(',')
@@ -380,6 +479,11 @@ const config: Config = {
   },
   authCookie: parseAuthCookie(),
   trustProxy: parseTrustProxy(),
+  claim: { integrity: parseClaimIntegrity() },
+  webhooks: {
+    allowLocalTargets: parseWebhookLocalTargets(),
+    timeoutMs: positiveInt('WEBHOOK_TIMEOUT_MS', 10_000),
+  },
 };
 
 export default config;

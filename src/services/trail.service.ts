@@ -192,7 +192,10 @@ export const buildEpisodeTrail = async (
       .limit(TRAIL_POINT_CAP)
       .select('type payload receivedAt capturedAt')
       .exec(),
-    familiarLocationService.list(episode.user.toString()),
+    // an ownerless partner phone (B4) has no familiar places to interpret by
+    episode.user
+      ? familiarLocationService.list(episode.user.toString())
+      : Promise.resolve([]),
   ]);
 
   return trailFromEnvelopes(envelopes.reverse(), familiarPlaces);

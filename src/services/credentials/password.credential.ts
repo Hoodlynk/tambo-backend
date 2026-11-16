@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import config from '../../config/config';
+import type { ClientContext } from '../../config/client';
 import PasswordResetToken from '../../models/passwordResetToken.model';
 import User from '../../models/user.model';
 import type { IUser } from '../../models/user.model';
@@ -9,6 +10,7 @@ import { generateOpaqueToken, hashOpaqueToken } from '../../utils/tokens';
 import * as audit from '../audit.service';
 import * as notifier from '../notifier.service';
 import * as otpService from '../otp.service';
+import * as partnerService from '../partner.service';
 import type { ChallengeSummary } from '../otp.service';
 import * as sessionService from '../session.service';
 import { clearLockout } from '../user.service';
@@ -76,6 +78,11 @@ export const register = async (
   input: RegisterInput,
   userAgent?: string,
 ): Promise<ChallengeSummary> => {
+  // an unknown code fails before anything is written
+  const partner = input.partnerCode
+    ? await partnerService.resolveForEnrolment(input.partnerCode)
+    : null;
+  const partnerFields = partnerService.signupFields(partner);
   const passwordHash = await hashPassword(input.password);
 
   // No exists() pre-check: the unique index is the authority, and translating
@@ -87,6 +94,7 @@ export const register = async (
       name: input.name,
       email: input.email,
       passwordHash,
+      ...partnerFields,
     });
   } catch (error) {
     if (!isDuplicateKeyError(error)) throw error;
@@ -104,6 +112,11 @@ export const register = async (
     }
     existing.name = input.name;
     existing.passwordHash = passwordHash;
+    // the registration that proves the mailbox decides the partner, too
+    existing.set('partner', partnerFields.partner);
+    existing.plan = partnerFields.plan;
+    existing.planSource = partnerFields.planSource;
+    existing.set('planExpiresAt', undefined);
     await existing.save();
     user = existing;
   }
@@ -163,6 +176,7 @@ export const login = async (
   input: LoginInput,
   userAgent?: string,
   ip?: string,
+  client?: ClientContext,
 ): Promise<AuthResult | ChallengeSummary> => {
   const context: audit.AuditContext = { userAgent, ip };
   const user = await User.findOne({ email: input.email }).select(
@@ -208,7 +222,10 @@ export const login = async (
   }
 
   audit.record(user._id, 'login_succeeded', context);
-  return { user, tokens: await sessionService.startSession(user, userAgent) };
+  return {
+    user,
+    tokens: await sessionService.startSession(user, userAgent, client),
+  };
 };
 
 /**
@@ -353,6 +370,7 @@ export const resetPassword = async (
   input: ResetPasswordInput,
   userAgent?: string,
   ip?: string,
+  client?: ClientContext,
 ): Promise<AuthResult> => {
   // Atomic claim, same discipline as refresh rotation: only one concurrent
   // presenter of this token can flip usedAt, so the token is truly single-use.
@@ -385,5 +403,8 @@ export const resetPassword = async (
   // legitimate owner must never be locked out of their own recovery
   await clearLockout(user._id.toString());
   audit.record(user._id, 'password_reset', { userAgent, ip });
-  return { user, tokens: await sessionService.startSession(user, userAgent) };
+  return {
+    user,
+    tokens: await sessionService.startSession(user, userAgent, client),
+  };
 };

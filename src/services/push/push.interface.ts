@@ -10,6 +10,15 @@ export interface PushMessage {
   data?: Record<string, string>;
 }
 
+/**
+ * A silent, data-only message: no banner, it only wakes the app (B2 remote
+ * commands). Sent at high priority so Android delivers it through Doze.
+ */
+export interface DataPushMessage {
+  tokens: string[];
+  data: Record<string, string>;
+}
+
 export interface PushResult {
   /**
    * Tokens the provider reports as dead (uninstalled app, rotated token).
@@ -26,4 +35,5 @@ export interface PushResult {
  */
 export interface Pusher {
   send(message: PushMessage): Promise<PushResult>;
+  sendData(message: DataPushMessage): Promise<PushResult>;
 }

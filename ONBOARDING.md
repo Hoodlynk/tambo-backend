@@ -60,7 +60,8 @@ fails if it drifts.
 |---|---|---|---|
 | Failed-unlock capture + evidence upload | ✓ (device admin) | — (no API) | — |
 | Camera snapshot bursts on failed unlock (F4) | ✓ with the overlay permission; clean on preinstall / Device-Owner tiers | — (no background camera) | — |
-| Owner console (devices, episodes, trail, pack, buddies) | ✓ | ✓ | ✓ |
+| Carrying out remote commands (B2: snapshot / locate / ring) | ✓ (wake via FCM data push, then poll) | locate only, best effort (background pushes are throttled) | — |
+| Owner console (devices, episodes, trail, pack, buddies, issuing commands) | ✓ | ✓ | ✓ |
 | Push alerts | FCM | FCM→APNs | web push |
 | Session transport | tokens in body | tokens in body | httpOnly cookie |
 

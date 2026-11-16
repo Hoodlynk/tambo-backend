@@ -55,6 +55,7 @@ describe('GET /api/v1/plan', () => {
       plan: 'free',
       effectivePlan: 'free',
       expiresAt: null,
+      source: 'self',
       entitlements: {
         maxDevices: 1,
         historyDays: 7,

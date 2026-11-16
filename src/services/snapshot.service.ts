@@ -184,7 +184,10 @@ export const buildEpisodeSnapshots = async (
         'envelopeId type payload sha256 receivedAt capturedAt burstId camera trigger seq mediaFileId mediaSha256 mediaBytes mediaContentType',
       )
       .exec(),
-    familiarLocationService.list(episode.user.toString()),
+    // an ownerless partner phone (B4) has no familiar places to interpret by
+    episode.user
+      ? familiarLocationService.list(episode.user.toString())
+      : Promise.resolve([]),
   ]);
   return burstsFromEnvelopes(envelopes, familiarPlaces);
 };

@@ -1,11 +1,12 @@
 import crypto from 'crypto';
 import config from '../config/config';
+import type { ClientContext } from '../config/client';
 import BurnedFamily from '../models/burnedFamily.model';
 import RefreshToken from '../models/refreshToken.model';
 import User from '../models/user.model';
 import type { IUser } from '../models/user.model';
 import { AppError } from '../utils/appError';
-import PushToken from '../models/pushToken.model';
+import * as pushTokenService from './pushToken.service';
 import * as audit from './audit.service';
 import {
   generateOpaqueToken,
@@ -28,6 +29,8 @@ export interface TokenPair {
 export interface SessionSummary {
   id: string;
   userAgent: string | null;
+  clientPlatform: string | null;
+  clientVersion: string | null;
   createdAt: Date;
   expiresAt: Date;
   current: boolean;
@@ -63,6 +66,7 @@ export const issueTokens = async (
   user: IUser,
   family: string,
   userAgent?: string,
+  client: ClientContext = {},
 ): Promise<TokenPair> => {
   const refreshToken = generateOpaqueToken();
 
@@ -72,6 +76,8 @@ export const issueTokens = async (
     family,
     expiresAt: refreshExpiryDate(),
     ...(userAgent ? { userAgent } : {}),
+    ...(client.platform ? { clientPlatform: client.platform } : {}),
+    ...(client.version ? { clientVersion: client.version } : {}),
   });
 
   return {
@@ -85,7 +91,9 @@ export const issueTokens = async (
 export const startSession = (
   user: IUser,
   userAgent?: string,
-): Promise<TokenPair> => issueTokens(user, crypto.randomUUID(), userAgent);
+  client?: ClientContext,
+): Promise<TokenPair> =>
+  issueTokens(user, crypto.randomUUID(), userAgent, client);
 
 /**
  * Rotates a refresh token.
@@ -103,6 +111,7 @@ export const startSession = (
 export const refresh = async (
   token: string,
   userAgent?: string,
+  client: ClientContext = {},
 ): Promise<{ user: IUser; tokens: TokenPair }> => {
   const tokenHash = hashOpaqueToken(token);
 
@@ -169,7 +178,14 @@ export const refresh = async (
     );
   }
 
-  const tokens = await issueTokens(user, claimed.family, userAgent);
+  // a build that omits the headers keeps what the lineage last reported; an
+  // upgraded build overwrites it, which is how the version history moves
+  const platform = client.platform ?? claimed.clientPlatform;
+  const version = client.version ?? claimed.clientVersion;
+  const tokens = await issueTokens(user, claimed.family, userAgent, {
+    ...(platform ? { platform } : {}),
+    ...(version ? { version } : {}),
+  });
 
   // Post-issue confirmation, closing the last interleaving: if a burn or a
   // bulk revoke began between our pre-checks and our token write, either its
@@ -232,7 +248,8 @@ export const revokeAllForUser = async (userId: string): Promise<void> => {
   // evicted here must not keep receiving this account's theft alerts. The
   // owner's own devices re-register on next app start (the documented
   // contract), so the cost is one silent gap, not lost protection.
-  await PushToken.deleteMany({ user: userId });
+  // Device-bound installs keep their remote-command wake-ups (B2).
+  await pushTokenService.revokeAlertsForUser(userId);
   audit.record(userId, 'sessions_revoked_all');
 };
 
@@ -252,6 +269,8 @@ export const listSessions = async (
   return sessions.map((session) => ({
     id: session._id.toString(),
     userAgent: session.userAgent ?? null,
+    clientPlatform: session.clientPlatform ?? null,
+    clientVersion: session.clientVersion ?? null,
     createdAt: session.createdAt,
     expiresAt: session.expiresAt,
     current: currentHash !== null && session.tokenHash === currentHash,

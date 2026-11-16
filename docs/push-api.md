@@ -35,11 +35,32 @@ DELETE /api/v1/push-tokens            (Bearer JWT)
 → 204
 ```
 
+**The protected phone also registers itself** (B2, remote commands), with
+its device token rather than a session:
+
+```
+POST /api/v1/evidence/push-token      (X-Device-Token)
+{ "token": "<fcm registration token>", "platform": "android" }
+```
+
+That binds the install to the enrolled device so remote commands can wake
+it with a silent data message (see [commands-api.md](commands-api.md)). A
+device register **never turns the account's alerts on** for the install. The
+ingest token outlives the owner's sessions, and a phone whose FCM token
+rotates in a thief's hands must not start hearing alerts. Only the signed-in
+register does that. Send both on app start.
+
+A partner-provisioned phone that nobody has linked yet gets
+`409 device_not_linked` here: installs belong to an account, and the phone
+has none until it is linked ([provisioning-api.md](provisioning-api.md)).
+Register again after linking.
+
 ## What gets pushed
 
 | Event | Content | Recipients |
 |---|---|---|
 | First alert (episode opens) | title "Tambo alert: … may be stolen", `data: { type: "first_alert", episodeId }` | owner + accepted buddies, **once per human per episode** (multicast to all their devices) |
+| Remote command issued | **silent data message**, `data: { type: "device_command", commandId, commandType }`, high priority | the device-bound install(s) of that device only |
 | Full pack sent | a **nudge** with `data: { type: "full_pack", episodeId }` — never the PDF | owner + accepted buddies with tokens |
 
 Design rules the clients can rely on:
@@ -60,7 +81,15 @@ Design rules the clients can rely on:
   change, and "sign out everywhere" delete the account's whole push registry
   - a stolen, signed-out device must not keep hearing theft alerts. Your own
   app re-registers on next start (which is why registering on every start is
-  the contract).
+  the contract). **Exception (B2):** an install bound to an enrolled device
+  is kept with alerts switched off, so remote commands can still wake the
+  stolen phone. An owner changing their password the minute the phone goes
+  missing is the normal case. `DELETE /push-tokens` on a device-bound install
+  does the same.
+- **The stolen phone never gets the alert about itself**: first alerts and
+  pack nudges for an episode skip the install bound to that episode's
+  device. A lock-screen "may be stolen" banner tells the thief when to pull
+  the SIM.
 
 ## Operator setup (human action)
 

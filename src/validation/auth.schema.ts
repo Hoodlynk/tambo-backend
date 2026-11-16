@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { partnerCode } from './partner.schema';
 
 /**
  * bcrypt silently ignores BYTES past 72, so two different passwords sharing
@@ -29,7 +30,13 @@ const name = z
 /** Opaque refresh/reset tokens: hex strings we issued. */
 const opaqueToken = z.string().trim().min(1, 'Token is required.');
 
-export const registerSchema = z.object({ name, email, password });
+export const registerSchema = z.object({
+  name,
+  email,
+  password,
+  /** A white-label build passes its partner's code (B3). */
+  partnerCode: partnerCode.optional(),
+});
 export const loginSchema = z.object({
   email,
   password: z.string().min(1, 'Password is required.'),

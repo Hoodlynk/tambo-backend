@@ -1,10 +1,12 @@
 import { z } from 'zod';
-import { USER_PLANS } from '../models/user.model';
+import { PLAN_SOURCES, USER_PLANS } from '../models/user.model';
 
 export const planSetSchema = z.object({
   plan: z.enum(USER_PLANS),
   /** ISO timestamp; only meaningful (and only kept) for paid plans. */
   expiresAt: z.iso.datetime().optional(),
+  /** Who pays; defaults to "self". */
+  source: z.enum(PLAN_SOURCES).optional(),
 });
 
 export const planUserIdSchema = z.object({

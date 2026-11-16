@@ -189,7 +189,7 @@ export const buildPack = async (
 
   const [owner, device, envelopes, firstAlert, familiarPlaces] =
     await Promise.all([
-      User.findById(episode.user),
+      User.findById(userId),
       Device.findById(episode.device),
       EvidenceEnvelope.find({ episode: episode._id })
         .sort({ receivedAt: 1 })
@@ -197,7 +197,7 @@ export const buildPack = async (
       PackDelivery.findOne({ episode: episode._id, kind: 'first_alert' })
         .sort({ sentAt: 1 })
         .exec(),
-      familiarLocationService.list(episode.user.toString()),
+      familiarLocationService.list(userId),
     ]);
   // the trail and the snapshot sets are computed from the envelopes already
   // in hand - the pack must not read the episode's evidence twice

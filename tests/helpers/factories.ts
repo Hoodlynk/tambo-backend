@@ -34,7 +34,12 @@ export const verifyOtp = (challengeId: string, code: string) =>
     .send({ challengeId, code });
 
 /** Returns the raw registration response. */
-export const startRegister = (overrides: Partial<typeof CREDENTIALS> = {}) =>
+/** Registration fields a test may override, including the B3 partner code. */
+export type RegisterOverrides = Partial<typeof CREDENTIALS> & {
+  partnerCode?: string;
+};
+
+export const startRegister = (overrides: RegisterOverrides = {}) =>
   request(testServer())
     .post('/api/auth/register')
     .send({ ...CREDENTIALS, ...overrides });
@@ -75,7 +80,7 @@ export const acceptLegalDocs = async (accessToken: string): Promise<void> => {
  * `acceptLegal: false` to get a user who has NOT accepted.
  */
 export const registerUser = async (
-  overrides: Partial<typeof CREDENTIALS> = {},
+  overrides: RegisterOverrides = {},
   { acceptLegal = true }: { acceptLegal?: boolean } = {},
 ): Promise<Registered> => {
   const res = await retryPhantom(() => startRegister(overrides), 'register');

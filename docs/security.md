@@ -103,6 +103,19 @@ capped at 100kb, and CORS denied by default — a native mobile client sends no
 `Origin` and needs no CORS grant. Add browser origins to
 `CORS_ALLOWED_ORIGINS` only when a web client actually exists.
 
+## Outbound requests to partner URLs (SSRF)
+
+Partner webhooks (B5) make the server POST to URLs a partner chose, which
+would otherwise let a partner key probe the internal network or a cloud
+metadata endpoint. Defences, in `src/services/webhook/transport.ts`: https
+only; IP literals in private, loopback, link-local, CGNAT and multicast
+ranges refused before connecting; hostnames resolved **inside the socket's
+own lookup**, so the address checked is the address connected to and DNS
+rebinding cannot swap it; redirects never followed; responses read for the
+status code only and never logged. `WEBHOOK_ALLOW_LOCAL_TARGETS=true` lifts
+this for local development and refuses to boot outside development/test.
+Details: [webhooks-api.md](webhooks-api.md).
+
 ## Mass assignment
 
 Every request body is parsed by a zod schema that **strips unknown keys** before
@@ -150,3 +163,6 @@ Deliberate, and worth revisiting before public launch:
    secret store, and no key rotation scheme for `JWT_ACCESS_SECRET` — rotating
    it invalidates every access token immediately (refresh tokens survive,
    because they are database-backed rather than signed).
+4. **Webhook signing secrets are stored as-is** (unselected, never
+   serialized), because HMAC needs the secret itself. Encryption at rest is on
+   the roadmap with the key-management decision.
