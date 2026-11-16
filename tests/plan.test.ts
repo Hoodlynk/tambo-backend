@@ -60,6 +60,11 @@ describe('GET /api/v1/plan', () => {
         historyDays: 7,
         trailCadenceSeconds: 300,
         pushAlerts: false,
+        snapshotPolicy: {
+          framesPerCamera: 3,
+          intervalSeconds: 2,
+          maxBurstsPerEpisode: 5,
+        },
       },
     });
   });

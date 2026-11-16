@@ -22,7 +22,32 @@ export interface Entitlements {
   trailCadenceSeconds: number;
   /** Real-time intruder alerts over push (email always works). */
   pushAlerts: boolean;
+  /**
+   * Advisory camera-burst policy returned to the device during an episode
+   * (F4). Advice on how much to capture, never a cap on what is accepted.
+   */
+  snapshotPolicy: SnapshotPolicy;
 }
+
+export interface SnapshotPolicy {
+  /** Frames to take from each camera per burst. */
+  framesPerCamera: number;
+  /** Seconds between frames of one burst. */
+  intervalSeconds: number;
+  /** Bursts the device should bother sending for one episode. */
+  maxBurstsPerEpisode: number;
+}
+
+const FREE_SNAPSHOTS: SnapshotPolicy = {
+  framesPerCamera: 3,
+  intervalSeconds: 2,
+  maxBurstsPerEpisode: 5,
+};
+const PAID_SNAPSHOTS: SnapshotPolicy = {
+  framesPerCamera: 3,
+  intervalSeconds: 2,
+  maxBurstsPerEpisode: 20,
+};
 
 const MATRIX: Record<UserPlan, Entitlements> = {
   free: {
@@ -30,18 +55,21 @@ const MATRIX: Record<UserPlan, Entitlements> = {
     historyDays: 7,
     trailCadenceSeconds: 300,
     pushAlerts: false,
+    snapshotPolicy: FREE_SNAPSHOTS,
   },
   pro: {
     maxDevices: 1,
     historyDays: null,
     trailCadenceSeconds: 60,
     pushAlerts: true,
+    snapshotPolicy: PAID_SNAPSHOTS,
   },
   family: {
     maxDevices: 5,
     historyDays: null,
     trailCadenceSeconds: 60,
     pushAlerts: true,
+    snapshotPolicy: PAID_SNAPSHOTS,
   },
 };
 

@@ -14,6 +14,7 @@ reference for your feature.
 | [devices-api.md](devices-api.md) | Device enrolment, ingest tokens, theft episodes, buddies |
 | [evidence-api.md](evidence-api.md) | Evidence envelope ingest, media upload, retention |
 | [trail-api.md](trail-api.md) | Location trail, static vs moving, familiar locations (F3) |
+| [f4-snapshots-scoping.md](f4-snapshots-scoping.md) | Camera snapshot bursts (F4): contract, Android capture design, iOS limits, legal note |
 | [legal-api.md](legal-api.md) | T&C / privacy versions, scroll-gated acceptance, the enrolment gate |
 | [push-api.md](push-api.md) | Push-token registry, FCM setup, alert fan-out rules |
 | [plans-api.md](plans-api.md) | Free/Pro/Family entitlements, plan endpoint, enforcement rules |
@@ -28,6 +29,9 @@ reference for your feature.
 | [architecture.md](architecture.md) | Layering, request lifecycle, the error model, session design — **read first** |
 | [security.md](security.md) | Threat model: what defends against what |
 | [access-tiers-decision.md](access-tiers-decision.md) | How deep Tambo can go on a phone, and via which distribution tier |
+| [program-2026-11.md](program-2026-11.md) | The November 2026 program: backend sessions B1-B5, the app restructure for iOS, the UI pass |
+| [oem-zero-screen-readiness.md](oem-zero-screen-readiness.md) | Preinstall + Zero-screen card readiness: what the code prepares, what the owner must obtain |
+| [white-label-scoping.md](white-label-scoping.md) | White-label scoping for OEM, insurer/telco, enterprise and BNPL partners |
 | [roadmap.md](roadmap.md) | Build plan & status — what is done, what is next |
 | [evidence-features-plan.md](evidence-features-plan.md) | The F-A/F-B/F-C feature designs (devices, ingest, pack) |
 | [plans-scoping.md](plans-scoping.md) | Free/Pro/Family entitlements & billing scoping |

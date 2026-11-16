@@ -1,7 +1,35 @@
 # Build plan & status
 
 The single source of truth for where the backend is and what comes next.
-Last updated: 2026-09-13.
+Last updated: 2026-11-13.
+
+**Active program (approved 2026-11-13)**: [program-2026-11.md](program-2026-11.md),
+backend sessions B1 snapshots (✅) → B2 remote commands → B3 partner tenancy +
+white-label config + launch handshake → B4 OEM provisioning and device-first
+enrolment → B5 partner webhooks + status cards, then the app repo restructure
+for iOS (M0-M6, run in that repo). Scoping records:
+[oem-zero-screen-readiness.md](oem-zero-screen-readiness.md),
+[white-label-scoping.md](white-label-scoping.md).
+
+### ✅ F4 — camera snapshot bursts (2026-11-13, session B1)
+PHOTO envelopes are frames of a burst (`burstId`, `seq`, `count`, `camera`,
+`trigger`, `location`, `headingDeg`, read leniently; legacy photos still
+ingest). Columns + index on the envelope, `snapshotPolicy` advice beside
+`trailCadenceSeconds` (free 3 frames/camera, 2 s, 5 bursts; paid 20), PHOTO
+fixes in the trail and the first-alert location, `GET /episodes/:id/snapshots`
+grouped per burst with place + familiar annotation, `GET
+/episodes/:id/snapshots/:envelopeId` streams a frame (owner-only, episode-
+scoped), `snapshotSets` in the pack JSON and a per-set PDF section (two frames
+embedded per set), media limit 300/h. 294 tests. Design and platform limits:
+[f4-snapshots-scoping.md](f4-snapshots-scoping.md). **Android capture (the
+overlay-permission spike on Transsion + Samsung) is the app repo's next native
+unit; iOS never gets snapshots.**
+
+### ⬜ B2 — remote commands (next)
+Owner-triggered `snapshot | locate | ring` while an episode is open:
+`DeviceCommand` queue, `pendingCommands` on ingest responses, a device-token
+poll, FCM data message to a device-scoped push token; results arrive as
+envelopes with `commandId`.
 
 **Active program (approved 2026-09-13)**: depth-first client-readiness &
 completion plan — Phase 0 API contract (✅) → 1 PWA cookie auth (✅) →

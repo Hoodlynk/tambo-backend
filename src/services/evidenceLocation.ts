@@ -60,21 +60,22 @@ export interface LastKnownLocation {
   location: EvidenceLocation;
   /** Server receipt time of the envelope that carried it. */
   at: Date;
-  /** Which evidence type carried it - UNLOCK_FAILED or TRAIL_POINT. */
+  /** Which evidence type carried it: UNLOCK_FAILED, TRAIL_POINT or PHOTO. */
   source: EnvelopeType;
 }
 
 /**
  * The device's most recent reported location, from the latest location-bearing
- * envelope (failed unlocks and trail points). Scans a bounded window of recent
- * envelopes; older history is the trail's concern (F3), not this lookup's.
+ * envelope (failed unlocks, trail points, snapshot frames). Scans a bounded
+ * window of recent envelopes; older history is the trail's concern (F3), not
+ * this lookup's.
  */
 export const lastKnownLocation = async (
   deviceId: Types.ObjectId,
 ): Promise<LastKnownLocation | null> => {
   const recent = await EvidenceEnvelope.find({
     device: deviceId,
-    type: { $in: ['UNLOCK_FAILED', 'TRAIL_POINT'] },
+    type: { $in: ['UNLOCK_FAILED', 'TRAIL_POINT', 'PHOTO'] },
   })
     .sort({ receivedAt: -1 })
     .limit(25)

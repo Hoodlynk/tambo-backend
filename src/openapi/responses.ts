@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import { AUTH_EVENT_TYPES } from '../models/authEvent.model';
+import {
+  SNAPSHOT_CAMERAS,
+  SNAPSHOT_TRIGGERS,
+} from '../models/evidenceEnvelope.model';
 import { OTP_PURPOSES } from '../models/otpChallenge.model';
 import { PUSH_PLATFORMS } from '../models/pushToken.model';
 import { USER_PLANS } from '../models/user.model';
@@ -201,7 +205,9 @@ export const trailResponse = z.object({
         capturedAt: isoDate.describe(
           "The device's claimed capture time - shown, never trusted.",
         ),
-        source: z.enum(['UNLOCK_FAILED', 'TRAIL_POINT']),
+        source: z
+          .enum(['UNLOCK_FAILED', 'TRAIL_POINT', 'PHOTO'])
+          .describe('PHOTO = a snapshot frame that carried a location.'),
         lat: z.number(),
         lng: z.number(),
         accuracyM: z.number().optional(),
@@ -229,7 +235,12 @@ export const pack = z.looseObject({
     movement: z.enum(['static', 'moving', 'unknown']),
     pointsWithoutFix: z.number(),
   }),
-  photos: z.array(z.looseObject({})),
+  snapshotSets: z
+    .array(z.looseObject({}))
+    .describe('Camera bursts in receipt order; see /episodes/{id}/snapshots.'),
+  photos: z
+    .array(z.looseObject({}))
+    .describe('Every frame, flat. Prefer snapshotSets.'),
   actionChecklist: z.array(z.string()),
   integrity: z.looseObject({
     algorithm: z.literal('Ed25519'),
@@ -239,6 +250,74 @@ export const pack = z.looseObject({
 });
 
 export const packResponse = z.object({ pack });
+
+const snapshotCamera = z.enum(SNAPSHOT_CAMERAS);
+const snapshotTrigger = z.enum(SNAPSHOT_TRIGGERS);
+
+export const snapshotsResponse = z.object({
+  snapshots: z.object({
+    summary: z.object({
+      bursts: z.number(),
+      frames: z.number(),
+      framesWithMedia: z
+        .number()
+        .describe('Frames whose bytes have arrived; the rest are pending.'),
+    }),
+    bursts: z.array(
+      z.object({
+        burstId: z.string(),
+        trigger: snapshotTrigger,
+        at: isoDate.describe('Server receipt time of the first frame.'),
+        capturedAt: isoDate.describe(
+          "The device's claim - shown, never trusted.",
+        ),
+        location: location.extend({ mapsLink: z.string() }).nullable(),
+        familiar: z
+          .object({ label: z.string(), distanceM: z.number() })
+          .nullable(),
+        expectedFrames: z
+          .number()
+          .nullable()
+          .describe('What the device said the burst would hold.'),
+        cameras: z.object({
+          front: z.number(),
+          back: z.number(),
+          unknown: z.number(),
+        }),
+        frames: z.array(
+          z.object({
+            envelopeId: z.string(),
+            seq: z.number().nullable(),
+            camera: snapshotCamera,
+            receivedAt: isoDate,
+            capturedAt: isoDate,
+            sha256: z.string().describe('Media hash once bytes landed.'),
+            bytes: z.number().optional(),
+            contentType: z.string().optional(),
+            hasMedia: z.boolean(),
+            headingDeg: z.number().optional(),
+            mediaPath: z
+              .string()
+              .describe(
+                'Relative path of GET /episodes/{id}/snapshots/{envelopeId}.',
+              ),
+          }),
+        ),
+      }),
+    ),
+  }),
+});
+
+export const snapshotPolicy = z
+  .object({
+    framesPerCamera: z.number(),
+    intervalSeconds: z.number(),
+    maxBurstsPerEpisode: z.number(),
+  })
+  .describe(
+    'Advisory camera-burst policy for the plan. Advice on how much to ' +
+      'capture; evidence is never refused.',
+  );
 
 export const packSendResponse = z.object({
   recipients: z.array(z.string()).describe('Email addresses the pack went to.'),
@@ -268,6 +347,7 @@ export const ingestResponse = z.object({
       'Advisory TRAIL_POINT interval while an episode is open, tuned to the ' +
         "owner's plan. Advice only - evidence is never refused.",
     ),
+  snapshotPolicy: snapshotPolicy.optional(),
 });
 
 export const mediaAckResponse = z.object({
@@ -353,6 +433,7 @@ export const planResponse = z.object({
         .describe('null = full history (bounded only by evidence retention).'),
       trailCadenceSeconds: z.number(),
       pushAlerts: z.boolean(),
+      snapshotPolicy,
     }),
   }),
 });

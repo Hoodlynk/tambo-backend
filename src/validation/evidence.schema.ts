@@ -41,5 +41,11 @@ export const mediaParamsSchema = z.object({
   envelopeId: z.string().regex(/^[\w-]{8,64}$/, 'Invalid envelope id.'),
 });
 
+/** The owner's read of one snapshot frame: episode id plus the frame's envelope id. */
+export const snapshotMediaParamsSchema = z.object({
+  id: z.string().regex(/^[a-f\d]{24}$/i, 'Invalid episode id.'),
+  envelopeId: z.string().regex(/^[\w-]{8,64}$/, 'Invalid envelope id.'),
+});
+
 export type EnvelopeInput = z.infer<typeof envelope>;
 export type IngestInput = z.infer<typeof ingestSchema>;

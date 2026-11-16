@@ -17,22 +17,47 @@ const streamToBuffer = (stream: NodeJS.ReadableStream): Promise<Buffer> =>
     stream.on('error', reject);
   });
 
-/** Photos embedded when the bytes are a format pdfkit accepts; capped at 4. */
-const loadEmbeddablePhotos = async (pack: EvidencePack): Promise<Buffer[]> => {
-  const buffers: Buffer[] = [];
+/** Per snapshot set, and across the whole document: a police printout, not an album. */
+const EMBED_PER_SET = 2;
+const EMBED_TOTAL = 8;
 
-  for (const photo of pack.photos.slice(0, 4)) {
-    const envelope = await EvidenceEnvelope.findOne({
-      envelopeId: photo.envelopeId,
-    }).select('mediaFileId mediaContentType');
-    if (!envelope?.mediaFileId) continue;
-    if (!/^image\/(jpe?g|png)$/i.test(envelope.mediaContentType ?? ''))
-      continue;
+/**
+ * Frames embedded when the bytes are a format pdfkit accepts, keyed by
+ * envelope id. The first front and the first back frame of each set are
+ * preferred: the intruder's face and their surroundings, one of each.
+ */
+const loadEmbeddableFrames = async (
+  pack: EvidencePack,
+): Promise<Map<string, Buffer>> => {
+  const buffers = new Map<string, Buffer>();
 
-    try {
-      buffers.push(await streamToBuffer(openMedia(envelope.mediaFileId)));
-    } catch {
-      // an unreadable photo must never sink the whole report
+  for (const set of pack.snapshotSets) {
+    if (buffers.size >= EMBED_TOTAL) break;
+    const withMedia = set.frames.filter((frame) => frame.hasMedia);
+    const preferred = [
+      withMedia.find((frame) => frame.camera === 'front'),
+      withMedia.find((frame) => frame.camera === 'back'),
+      ...withMedia,
+    ].filter((frame): frame is NonNullable<typeof frame> => Boolean(frame));
+    const chosen = [...new Set(preferred)].slice(0, EMBED_PER_SET);
+
+    for (const frame of chosen) {
+      if (buffers.size >= EMBED_TOTAL) break;
+      const envelope = await EvidenceEnvelope.findOne({
+        envelopeId: frame.envelopeId,
+      }).select('mediaFileId mediaContentType');
+      if (!envelope?.mediaFileId) continue;
+      if (!/^image\/(jpe?g|png)$/i.test(envelope.mediaContentType ?? ''))
+        continue;
+
+      try {
+        buffers.set(
+          frame.envelopeId,
+          await streamToBuffer(openMedia(envelope.mediaFileId)),
+        );
+      } catch {
+        // an unreadable photo must never sink the whole report
+      }
     }
   }
 
@@ -40,7 +65,7 @@ const loadEmbeddablePhotos = async (pack: EvidencePack): Promise<Buffer[]> => {
 };
 
 export const renderPackPdf = async (pack: EvidencePack): Promise<Buffer> => {
-  const photoBuffers = await loadEmbeddablePhotos(pack);
+  const frameBuffers = await loadEmbeddableFrames(pack);
 
   const doc = new PDFDocument({ size: 'A4', margin: 48, bufferPages: true });
   const done = streamToBuffer(doc as unknown as NodeJS.ReadableStream);
@@ -193,29 +218,70 @@ export const renderPackPdf = async (pack: EvidencePack): Promise<Buffer> => {
       .fontSize(10);
   }
 
-  // --- Photos --------------------------------------------------------------------
-  heading(`Photos (${pack.photos.length})`);
-  if (pack.photos.length === 0) {
+  // --- Snapshot sets ---------------------------------------------------------------
+  heading(
+    `Camera snapshots (${pack.snapshotSets.length} set${pack.snapshotSets.length === 1 ? '' : 's'}, ${pack.photos.length} frame${pack.photos.length === 1 ? '' : 's'})`,
+  );
+  if (pack.snapshotSets.length === 0) {
     doc.text(
-      'None captured. Android does not allow background camera capture; photos exist only if the compliant foreground path ran.',
+      'None captured. A consumer Android install can only photograph during a failed unlock with the owner-granted overlay permission, and iOS never allows it; snapshots exist only where the phone could take them.',
     );
   }
-  for (const buffer of photoBuffers) {
-    try {
-      doc.image(buffer, { fit: [220, 220] });
-      doc.moveDown(0.4);
-    } catch {
-      // corrupt bytes: listed in the manifest, skipped visually
-    }
-  }
-  for (const photo of pack.photos) {
+  const TRIGGER_WORDS: Record<string, string> = {
+    failed_unlock: 'a failed unlock attempt',
+    episode_open: 'the theft episode opening',
+    owner_request: "the owner's request",
+    periodic: 'the periodic capture while stolen',
+    tamper: 'tampering with the phone',
+    unknown: 'an unrecorded trigger',
+  };
+  pack.snapshotSets.forEach((set, index) => {
     doc
-      .fontSize(8)
+      .font('Helvetica-Bold')
       .text(
-        `- ${photo.envelopeId} received ${photo.receivedAt} sha256 ${photo.sha256}`,
+        `Set ${index + 1}: ${set.receivedAt}, taken on ${TRIGGER_WORDS[set.trigger] ?? set.trigger}`,
       )
-      .fontSize(10);
-  }
+      .font('Helvetica');
+    doc.text(
+      `  Frames: ${set.cameras.front} front camera, ${set.cameras.back} back camera` +
+        (set.cameras.unknown > 0 ? `, ${set.cameras.unknown} unspecified` : ''),
+    );
+    if (set.location) {
+      doc.text(
+        `  Location: ${set.location.lat}, ${set.location.lng}` +
+          (set.location.accuracyM !== undefined
+            ? ` (±${set.location.accuracyM}m)`
+            : '') +
+          (set.familiar
+            ? ` - within familiar location "${set.familiar.label}"`
+            : ''),
+      );
+      mapsLine(set.location.mapsLink);
+    } else {
+      doc.text('  Location: not reported with this set.');
+    }
+    for (const frame of set.frames) {
+      const buffer = frameBuffers.get(frame.envelopeId);
+      if (!buffer) continue;
+      try {
+        doc.image(buffer, { fit: [220, 220] });
+        doc.fontSize(8).text(`${frame.camera} camera, ${frame.receivedAt}`);
+        doc.fontSize(10).moveDown(0.4);
+      } catch {
+        // corrupt bytes: listed in the manifest, skipped visually
+      }
+    }
+    for (const frame of set.frames) {
+      doc
+        .fontSize(8)
+        .text(
+          `  - ${frame.envelopeId} ${frame.camera} received ${frame.receivedAt} sha256 ${frame.sha256}` +
+            (frame.hasMedia ? '' : ' (bytes not received)'),
+        )
+        .fontSize(10);
+    }
+    doc.moveDown(0.3);
+  });
 
   // --- Action checklist ------------------------------------------------------------
   heading('What to do now (Kenya)');

@@ -119,6 +119,21 @@ export const seed = async (): Promise<SeedResult> => {
       capturedAt: new Date().toISOString(),
       payload: JSON.stringify(location),
     })),
+    // one camera burst (F4) at the last fix: a front and a back frame, bytes
+    // deliberately not uploaded so the client sees the "pending" shape too
+    ...(['front', 'back'] as const).map((camera, index) => ({
+      id: `seed-${run}-snap-${index}`,
+      type: 'PHOTO' as const,
+      capturedAt: new Date().toISOString(),
+      payload: JSON.stringify({
+        burstId: `seed-burst-${run}`,
+        seq: index,
+        count: 2,
+        camera,
+        trigger: 'failed_unlock',
+        location: points[2],
+      }),
+    })),
   ].map((envelope) => ({ ...envelope, sha256: sha256Hex(envelope.payload) }));
 
   await evidenceService.ingestBatch(device, envelopes);

@@ -59,6 +59,7 @@ fails if it drifts.
 | | Android | iOS | PWA |
 |---|---|---|---|
 | Failed-unlock capture + evidence upload | ✓ (device admin) | — (no API) | — |
+| Camera snapshot bursts on failed unlock (F4) | ✓ with the overlay permission; clean on preinstall / Device-Owner tiers | — (no background camera) | — |
 | Owner console (devices, episodes, trail, pack, buddies) | ✓ | ✓ | ✓ |
 | Push alerts | FCM | FCM→APNs | web push |
 | Session transport | tokens in body | tokens in body | httpOnly cookie |

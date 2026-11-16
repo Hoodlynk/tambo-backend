@@ -10,6 +10,21 @@ export const ENVELOPE_TYPES = [
 ] as const;
 export type EnvelopeType = (typeof ENVELOPE_TYPES)[number];
 
+/** Which camera a snapshot frame came from (F4). */
+export const SNAPSHOT_CAMERAS = ['front', 'back', 'unknown'] as const;
+export type SnapshotCamera = (typeof SNAPSHOT_CAMERAS)[number];
+
+/** Why the device fired a snapshot burst (F4). */
+export const SNAPSHOT_TRIGGERS = [
+  'failed_unlock',
+  'episode_open',
+  'owner_request',
+  'periodic',
+  'tamper',
+  'unknown',
+] as const;
+export type SnapshotTrigger = (typeof SNAPSHOT_TRIGGERS)[number];
+
 /**
  * One self-contained unit of evidence, exactly as the device queued it
  * (Evidence doc S1.1). Two clocks, deliberately kept apart:
@@ -42,6 +57,15 @@ export interface IEvidenceEnvelope extends Document<Types.ObjectId> {
   mediaSha256?: string;
   mediaContentType?: string;
   mediaBytes?: number;
+  /**
+   * Snapshot burst columns (F4), PHOTO envelopes only. Copied out of the
+   * payload at ingest so bursts can be grouped and indexed; the payload string
+   * remains the evidence, these are a read model and carry no integrity weight.
+   */
+  burstId?: string;
+  camera?: SnapshotCamera;
+  trigger?: SnapshotTrigger;
+  seq?: number;
   expiresAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -62,6 +86,10 @@ const evidenceEnvelopeSchema = new Schema<IEvidenceEnvelope>(
     mediaSha256: { type: String },
     mediaContentType: { type: String },
     mediaBytes: { type: Number },
+    burstId: { type: String },
+    camera: { type: String, enum: SNAPSHOT_CAMERAS },
+    trigger: { type: String, enum: SNAPSHOT_TRIGGERS },
+    seq: { type: Number },
     // TTL index: retention enforced by the database, not a policy paragraph
     expiresAt: { type: Date, required: true, expires: 0 },
   },
@@ -72,6 +100,8 @@ const evidenceEnvelopeSchema = new Schema<IEvidenceEnvelope>(
 evidenceEnvelopeSchema.index({ device: 1, type: 1, receivedAt: -1 });
 // pack assembly (F-C): everything in one episode, in server-time order
 evidenceEnvelopeSchema.index({ episode: 1, receivedAt: 1 });
+// snapshot bursts (F4): the frames of one capture, in the device's order
+evidenceEnvelopeSchema.index({ episode: 1, burstId: 1, seq: 1 });
 
 export const EvidenceEnvelope = model<IEvidenceEnvelope>(
   'EvidenceEnvelope',

@@ -91,6 +91,94 @@ Photo bytes for a `PHOTO` envelope (which must be ingested first).
 | `media_conflict` | 409 | Envelope already has DIFFERENT media |
 | `payload_too_large` | 413 | Over the 8 MB cap |
 
+## Camera snapshot bursts (F4)
+
+A `PHOTO` envelope is one **frame** of a **burst**: the several front- and
+back-camera pictures the phone takes in one go while it is being unlocked or
+tampered with. The payload is still an opaque hashed string; the server reads
+it leniently (like locations) for these fields:
+
+```json
+{
+  "burstId": "4b1e…-device-generated, shared by every frame of the burst",
+  "seq": 0,
+  "count": 3,
+  "camera": "front",
+  "trigger": "failed_unlock",
+  "location": { "lat": -1.2921, "lng": 36.8219, "accuracyM": 12 },
+  "headingDeg": 240
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `burstId` | 8-64 url-safe chars, one per capture. Frames with the same id group into one **set**. |
+| `seq`, `count` | Position within the burst and how many frames it will hold. |
+| `camera` | `front` (the person holding the phone) or `back` (the surroundings). |
+| `trigger` | `failed_unlock` \| `episode_open` \| `owner_request` \| `periodic` \| `tamper`. |
+| `location` | Where the burst was taken. Snapshot frames are **trail fixes** (source `PHOTO`). |
+| `headingDeg` | Compass heading of the back camera, 0-359, optional. |
+
+A payload without these fields is a legacy single photo: it still ingests and
+reads as a set of one from an unknown camera. Send the frame envelope first,
+then its bytes to `/evidence/:envelopeId/media`; the read model shows
+`hasMedia: false` until the bytes land.
+
+Design, platform limits and the legal note: [f4-snapshots-scoping.md](f4-snapshots-scoping.md).
+
+### `snapshotPolicy` in the ingest response
+
+While an episode is open the ingest response carries, beside
+`trailCadenceSeconds`, the plan-tuned **advice** on how much to capture:
+
+```json
+{ "snapshotPolicy": { "framesPerCamera": 3, "intervalSeconds": 2, "maxBurstsPerEpisode": 5 } }
+```
+
+Advice only. Evidence is never refused because a device sent more
+([plans-api.md](plans-api.md)).
+
+### Reading the sets: `GET /api/v1/episodes/:id/snapshots` (Bearer, owner)
+
+Frames grouped per burst in server-receipt order, each set pinned to the first
+location any of its frames carried and annotated with the owner's familiar
+place when inside one:
+
+```json
+{
+  "snapshots": {
+    "summary": { "bursts": 2, "frames": 5, "framesWithMedia": 4 },
+    "bursts": [
+      {
+        "burstId": "4b1e…", "trigger": "failed_unlock",
+        "at": "2026-11-13T08:00:04.120Z", "capturedAt": "2026-11-13T08:00:02.000Z",
+        "location": { "lat": -1.2921, "lng": 36.8219, "accuracyM": 12, "mapsLink": "https://maps.google.com/?q=-1.2921,36.8219" },
+        "familiar": { "label": "home", "distanceM": 44 },
+        "expectedFrames": 3,
+        "cameras": { "front": 2, "back": 1, "unknown": 0 },
+        "frames": [
+          { "envelopeId": "…", "seq": 0, "camera": "front", "receivedAt": "…", "capturedAt": "…",
+            "sha256": "<media hash>", "bytes": 183294, "contentType": "image/jpeg",
+            "hasMedia": true, "mediaPath": "/api/v1/episodes/<id>/snapshots/<envelopeId>" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+`GET /api/v1/episodes/:id/snapshots/:envelopeId` streams one frame's bytes
+with its `Content-Type` and `X-Content-Sha256`. Scoped to the episode: an
+envelope id alone never opens a photo. Errors: `episode_not_found`,
+`snapshot_not_found`, `media_not_available` (bytes not uploaded yet), all 404.
+
+**Owner-only.** Buddies see photos in the PDF pack they are emailed, never a
+URL: intruder photos are third-party data and stay inside the owner's account.
+
+The pack JSON carries the same grouping as `snapshotSets`; the PDF renders a
+"Camera snapshots" section per set with the location link and up to two
+embedded frames per set (front first, then back).
+
 ## Retention as code
 
 Every envelope carries a computed `expiresAt` enforced by a TTL index:
@@ -102,4 +190,5 @@ the job.
 
 ## Rate limits
 
-Keyed per device: 240 envelope batches/hour, 60 media uploads/hour.
+Keyed per device: 240 envelope batches/hour, 300 media uploads/hour (sized
+for a pro episode's 20 bursts of 3 frames per camera, with retries).

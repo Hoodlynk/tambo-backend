@@ -26,7 +26,7 @@ export interface TrailPoint {
   /** The DEVICE's claim of when the fix was taken - recorded, never trusted.
    *  Matters when an offline device uploads a buffered trail in one batch. */
   capturedAt: Date;
-  /** Which evidence type carried the fix - UNLOCK_FAILED or TRAIL_POINT. */
+  /** Which evidence type carried the fix: UNLOCK_FAILED, TRAIL_POINT or PHOTO. */
   source: EnvelopeType;
   lat: number;
   lng: number;
@@ -66,6 +66,18 @@ const STATIC_RADIUS_FLOOR_M = 150;
  * that would erase the strongest theft cue from the pack.
  */
 const CLASSIFICATION_ACCURACY_CEILING_M = 250;
+
+/**
+ * The evidence types that may carry a location fix. A snapshot burst (F4)
+ * is pinned to where the phone was when the camera fired, so its frames are
+ * trail fixes too - the place a photo was taken is exactly what the owner
+ * wants to see next to it.
+ */
+export const LOCATION_BEARING_TYPES: readonly EnvelopeType[] = [
+  'UNLOCK_FAILED',
+  'TRAIL_POINT',
+  'PHOTO',
+];
 
 /** Bounded read: extremely long trails keep their NEWEST fixes (the current
  *  location always matters most); the cap is far beyond a realistic episode. */
@@ -144,9 +156,7 @@ export const trailFromEnvelopes = (
 ): EpisodeTrail => {
   const points: TrailPoint[] = [];
   for (const envelope of envelopes) {
-    if (envelope.type !== 'UNLOCK_FAILED' && envelope.type !== 'TRAIL_POINT') {
-      continue;
-    }
+    if (!LOCATION_BEARING_TYPES.includes(envelope.type)) continue;
     const location = parseLocation(envelope.payload);
     if (!location) continue;
     points.push({
@@ -176,7 +186,7 @@ export const buildEpisodeTrail = async (
     // volumes, then restored to chronological order for the trail
     EvidenceEnvelope.find({
       episode: episode._id,
-      type: { $in: ['UNLOCK_FAILED', 'TRAIL_POINT'] },
+      type: { $in: LOCATION_BEARING_TYPES },
     })
       .sort({ receivedAt: -1 })
       .limit(TRAIL_POINT_CAP)

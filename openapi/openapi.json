@@ -4095,8 +4095,10 @@
                                 "type": "string",
                                 "enum": [
                                   "UNLOCK_FAILED",
-                                  "TRAIL_POINT"
-                                ]
+                                  "TRAIL_POINT",
+                                  "PHOTO"
+                                ],
+                                "description": "PHOTO = a snapshot frame that carried a location."
                               },
                               "lat": {
                                 "type": "number"
@@ -4194,6 +4196,357 @@
           },
           "404": {
             "description": "`episode_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/episodes/{id}/snapshots": {
+      "get": {
+        "tags": [
+          "Episodes"
+        ],
+        "summary": "Camera snapshot bursts: frames grouped per capture, each pinned to a place",
+        "description": "PHOTO envelopes grouped by burstId in server-receipt order. Owner only: buddies receive photos in the PDF pack, never a URL. Each frame carries mediaPath for the bytes; hasMedia is false until they arrive.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "snapshots": {
+                      "type": "object",
+                      "properties": {
+                        "summary": {
+                          "type": "object",
+                          "properties": {
+                            "bursts": {
+                              "type": "number"
+                            },
+                            "frames": {
+                              "type": "number"
+                            },
+                            "framesWithMedia": {
+                              "type": "number",
+                              "description": "Frames whose bytes have arrived; the rest are pending."
+                            }
+                          },
+                          "required": [
+                            "bursts",
+                            "frames",
+                            "framesWithMedia"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "bursts": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "burstId": {
+                                "type": "string"
+                              },
+                              "trigger": {
+                                "type": "string",
+                                "enum": [
+                                  "failed_unlock",
+                                  "episode_open",
+                                  "owner_request",
+                                  "periodic",
+                                  "tamper",
+                                  "unknown"
+                                ]
+                              },
+                              "at": {
+                                "type": "string",
+                                "description": "Server receipt time of the first frame."
+                              },
+                              "capturedAt": {
+                                "type": "string",
+                                "description": "The device's claim - shown, never trusted."
+                              },
+                              "location": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "lat": {
+                                    "type": "number"
+                                  },
+                                  "lng": {
+                                    "type": "number"
+                                  },
+                                  "accuracyM": {
+                                    "type": "number"
+                                  },
+                                  "mapsLink": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "lat",
+                                  "lng",
+                                  "mapsLink"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "familiar": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "distanceM": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "label",
+                                  "distanceM"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "expectedFrames": {
+                                "nullable": true,
+                                "description": "What the device said the burst would hold.",
+                                "type": "number"
+                              },
+                              "cameras": {
+                                "type": "object",
+                                "properties": {
+                                  "front": {
+                                    "type": "number"
+                                  },
+                                  "back": {
+                                    "type": "number"
+                                  },
+                                  "unknown": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "front",
+                                  "back",
+                                  "unknown"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "frames": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "envelopeId": {
+                                      "type": "string"
+                                    },
+                                    "seq": {
+                                      "nullable": true,
+                                      "type": "number"
+                                    },
+                                    "camera": {
+                                      "type": "string",
+                                      "enum": [
+                                        "front",
+                                        "back",
+                                        "unknown"
+                                      ]
+                                    },
+                                    "receivedAt": {
+                                      "type": "string",
+                                      "description": "ISO-8601 timestamp"
+                                    },
+                                    "capturedAt": {
+                                      "type": "string",
+                                      "description": "ISO-8601 timestamp"
+                                    },
+                                    "sha256": {
+                                      "type": "string",
+                                      "description": "Media hash once bytes landed."
+                                    },
+                                    "bytes": {
+                                      "type": "number"
+                                    },
+                                    "contentType": {
+                                      "type": "string"
+                                    },
+                                    "hasMedia": {
+                                      "type": "boolean"
+                                    },
+                                    "headingDeg": {
+                                      "type": "number"
+                                    },
+                                    "mediaPath": {
+                                      "type": "string",
+                                      "description": "Relative path of GET /episodes/{id}/snapshots/{envelopeId}."
+                                    }
+                                  },
+                                  "required": [
+                                    "envelopeId",
+                                    "seq",
+                                    "camera",
+                                    "receivedAt",
+                                    "capturedAt",
+                                    "sha256",
+                                    "hasMedia",
+                                    "mediaPath"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "burstId",
+                              "trigger",
+                              "at",
+                              "capturedAt",
+                              "location",
+                              "familiar",
+                              "expectedFrames",
+                              "cameras",
+                              "frames"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "summary",
+                        "bursts"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "snapshots"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`episode_not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/episodes/{id}/snapshots/{envelopeId}": {
+      "get": {
+        "tags": [
+          "Episodes"
+        ],
+        "summary": "The bytes of one snapshot frame",
+        "description": "Streams the stored media with its content type; X-Content-Sha256 carries the hash the integrity manifest lists. Scoped to the episode: an envelope id alone never opens a photo.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f\\d]{24}$"
+            }
+          },
+          {
+            "name": "envelopeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{8,64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The image bytes.",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`validation_error` — A field failed validation; see details[].",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_token` — Also: \"missing_token\" when the Authorization header is absent, and \"token_expired\" when the token lapsed - on token_expired the client refreshes instead of signing out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`episode_not_found` · `snapshot_not_found` — No PHOTO envelope with that id in this episode. · `media_not_available` — The envelope exists but its bytes have not arrived yet.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4333,13 +4686,23 @@
                           ],
                           "additionalProperties": {}
                         },
+                        "snapshotSets": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": {}
+                          },
+                          "description": "Camera bursts in receipt order; see /episodes/{id}/snapshots."
+                        },
                         "photos": {
                           "type": "array",
                           "items": {
                             "type": "object",
                             "properties": {},
                             "additionalProperties": {}
-                          }
+                          },
+                          "description": "Every frame, flat. Prefer snapshotSets."
                         },
                         "actionChecklist": {
                           "type": "array",
@@ -4380,6 +4743,7 @@
                         "unlockAttempts",
                         "trail",
                         "trailSummary",
+                        "snapshotSets",
                         "photos",
                         "actionChecklist",
                         "integrity"
@@ -4595,7 +4959,7 @@
           "Evidence"
         ],
         "summary": "Ingest a batch of evidence envelopes (idempotent per envelope id)",
-        "description": "Authenticates as a DEVICE via X-Device-Token. 200 even with per-envelope rejections: read the ACK list; retry only failures. An ingest response carrying episodeId/episodeOpened is the cue to start the location-trail fan-out.",
+        "description": "Authenticates as a DEVICE via X-Device-Token. 200 even with per-envelope rejections: read the ACK list; retry only failures. An ingest response carrying episodeId/episodeOpened is the cue to start the location-trail fan-out and the camera bursts; trailCadenceSeconds and snapshotPolicy are the advisory cadence for each.",
         "parameters": [
           {
             "name": "X-Device-Token",
@@ -4713,6 +5077,27 @@
                     "trailCadenceSeconds": {
                       "description": "Advisory TRAIL_POINT interval while an episode is open, tuned to the owner's plan. Advice only - evidence is never refused.",
                       "type": "number"
+                    },
+                    "snapshotPolicy": {
+                      "type": "object",
+                      "properties": {
+                        "framesPerCamera": {
+                          "type": "number"
+                        },
+                        "intervalSeconds": {
+                          "type": "number"
+                        },
+                        "maxBurstsPerEpisode": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "framesPerCamera",
+                        "intervalSeconds",
+                        "maxBurstsPerEpisode"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Advisory camera-burst policy for the plan. Advice on how much to capture; evidence is never refused."
                     }
                   },
                   "required": [
@@ -5884,13 +6269,35 @@
                             },
                             "pushAlerts": {
                               "type": "boolean"
+                            },
+                            "snapshotPolicy": {
+                              "type": "object",
+                              "properties": {
+                                "framesPerCamera": {
+                                  "type": "number"
+                                },
+                                "intervalSeconds": {
+                                  "type": "number"
+                                },
+                                "maxBurstsPerEpisode": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "framesPerCamera",
+                                "intervalSeconds",
+                                "maxBurstsPerEpisode"
+                              ],
+                              "additionalProperties": false,
+                              "description": "Advisory camera-burst policy for the plan. Advice on how much to capture; evidence is never refused."
                             }
                           },
                           "required": [
                             "maxDevices",
                             "historyDays",
                             "trailCadenceSeconds",
-                            "pushAlerts"
+                            "pushAlerts",
+                            "snapshotPolicy"
                           ],
                           "additionalProperties": false
                         }
@@ -6024,13 +6431,35 @@
                             },
                             "pushAlerts": {
                               "type": "boolean"
+                            },
+                            "snapshotPolicy": {
+                              "type": "object",
+                              "properties": {
+                                "framesPerCamera": {
+                                  "type": "number"
+                                },
+                                "intervalSeconds": {
+                                  "type": "number"
+                                },
+                                "maxBurstsPerEpisode": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "framesPerCamera",
+                                "intervalSeconds",
+                                "maxBurstsPerEpisode"
+                              ],
+                              "additionalProperties": false,
+                              "description": "Advisory camera-burst policy for the plan. Advice on how much to capture; evidence is never refused."
                             }
                           },
                           "required": [
                             "maxDevices",
                             "historyDays",
                             "trailCadenceSeconds",
-                            "pushAlerts"
+                            "pushAlerts",
+                            "snapshotPolicy"
                           ],
                           "additionalProperties": false
                         }

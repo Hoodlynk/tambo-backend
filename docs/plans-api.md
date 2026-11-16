@@ -19,6 +19,7 @@ Product scoping: [plans-scoping.md](plans-scoping.md).
 | `historyDays` (activity reads) | 7 | full* | full* |
 | `trailCadenceSeconds` (advisory) | 300 | 60 | 60 |
 | `pushAlerts` (real-time push) | — | ✓ | ✓ |
+| `snapshotPolicy` (advisory, F4) | 3 frames/camera, 2 s apart, 5 bursts/episode | 3 / 2 s / 20 | 3 / 2 s / 20 |
 
 \* "Full" is still bounded by evidence retention (90d routine / 365d episode) —
 a safety/privacy policy, not a plan perk. The API reports it as
@@ -44,7 +45,8 @@ a safety/privacy policy, not a plan perk. The API reports it as
 ```
 GET /api/v1/plan                       (Bearer)
 → 200 { "plan": { "plan", "effectivePlan", "expiresAt",
-                  "entitlements": { maxDevices, historyDays, trailCadenceSeconds, pushAlerts } } }
+                  "entitlements": { maxDevices, historyDays, trailCadenceSeconds, pushAlerts,
+                                    snapshotPolicy: { framesPerCamera, intervalSeconds, maxBurstsPerEpisode } } } }
 ```
 
 Backs the Settings "Subscription" row. Branch on `effectivePlan`.
@@ -64,3 +66,6 @@ Downgrading to free (or omitting `expiresAt`) clears the expiry.
   response says so: `activity.historyDays` (null = full history).
 - Evidence ingest responses carry `trailCadenceSeconds` while an episode is
   open — the phone should adopt it as its TRAIL_POINT interval.
+- The same responses carry `snapshotPolicy` — how many camera frames to take
+  per burst and how many bursts to bother sending. Advice: a device that sends
+  more is never refused, and nothing is ever deleted for exceeding it.

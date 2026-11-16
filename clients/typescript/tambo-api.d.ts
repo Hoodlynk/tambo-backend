@@ -2727,8 +2727,11 @@ export interface paths {
                                     at: string;
                                     /** @description The device's claimed capture time - shown, never trusted. */
                                     capturedAt: string;
-                                    /** @enum {string} */
-                                    source: "UNLOCK_FAILED" | "TRAIL_POINT";
+                                    /**
+                                     * @description PHOTO = a snapshot frame that carried a location.
+                                     * @enum {string}
+                                     */
+                                    source: "UNLOCK_FAILED" | "TRAIL_POINT" | "PHOTO";
                                     lat: number;
                                     lng: number;
                                     accuracyM?: number;
@@ -2766,6 +2769,196 @@ export interface paths {
                     };
                 };
                 /** @description `episode_not_found` */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/episodes/{id}/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Camera snapshot bursts: frames grouped per capture, each pinned to a place
+         * @description PHOTO envelopes grouped by burstId in server-receipt order. Owner only: buddies receive photos in the PDF pack, never a URL. Each frame carries mediaPath for the bytes; hasMedia is false until they arrive.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            snapshots: {
+                                summary: {
+                                    bursts: number;
+                                    frames: number;
+                                    /** @description Frames whose bytes have arrived; the rest are pending. */
+                                    framesWithMedia: number;
+                                };
+                                bursts: {
+                                    burstId: string;
+                                    /** @enum {string} */
+                                    trigger: "failed_unlock" | "episode_open" | "owner_request" | "periodic" | "tamper" | "unknown";
+                                    /** @description Server receipt time of the first frame. */
+                                    at: string;
+                                    /** @description The device's claim - shown, never trusted. */
+                                    capturedAt: string;
+                                    location: {
+                                        lat: number;
+                                        lng: number;
+                                        accuracyM?: number;
+                                        mapsLink: string;
+                                    } | null;
+                                    familiar: {
+                                        label: string;
+                                        distanceM: number;
+                                    } | null;
+                                    /** @description What the device said the burst would hold. */
+                                    expectedFrames: number | null;
+                                    cameras: {
+                                        front: number;
+                                        back: number;
+                                        unknown: number;
+                                    };
+                                    frames: {
+                                        envelopeId: string;
+                                        seq: number | null;
+                                        /** @enum {string} */
+                                        camera: "front" | "back" | "unknown";
+                                        /** @description ISO-8601 timestamp */
+                                        receivedAt: string;
+                                        /** @description ISO-8601 timestamp */
+                                        capturedAt: string;
+                                        /** @description Media hash once bytes landed. */
+                                        sha256: string;
+                                        bytes?: number;
+                                        contentType?: string;
+                                        hasMedia: boolean;
+                                        headingDeg?: number;
+                                        /** @description Relative path of GET /episodes/{id}/snapshots/{envelopeId}. */
+                                        mediaPath: string;
+                                    }[];
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `episode_not_found` */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/episodes/{id}/snapshots/{envelopeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The bytes of one snapshot frame
+         * @description Streams the stored media with its content type; X-Content-Sha256 carries the hash the integrity manifest lists. Scoped to the episode: an envelope id alone never opens a photo.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    envelopeId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The image bytes. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "image/jpeg": string;
+                    };
+                };
+                /** @description `validation_error` — A field failed validation; see details[]. */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `invalid_token` — Also: "missing_token" when the Authorization header is absent, and "token_expired" when the token lapsed - on token_expired the client refreshes instead of signing out. */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+                /** @description `episode_not_found` · `snapshot_not_found` — No PHOTO envelope with that id in this episode. · `media_not_available` — The envelope exists but its bytes have not arrived yet. */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -2845,6 +3038,11 @@ export interface paths {
                                 } & {
                                     [key: string]: unknown;
                                 };
+                                /** @description Camera bursts in receipt order; see /episodes/{id}/snapshots. */
+                                snapshotSets: {
+                                    [key: string]: unknown;
+                                }[];
+                                /** @description Every frame, flat. Prefer snapshotSets. */
                                 photos: {
                                     [key: string]: unknown;
                                 }[];
@@ -3053,7 +3251,7 @@ export interface paths {
         put?: never;
         /**
          * Ingest a batch of evidence envelopes (idempotent per envelope id)
-         * @description Authenticates as a DEVICE via X-Device-Token. 200 even with per-envelope rejections: read the ACK list; retry only failures. An ingest response carrying episodeId/episodeOpened is the cue to start the location-trail fan-out.
+         * @description Authenticates as a DEVICE via X-Device-Token. 200 even with per-envelope rejections: read the ACK list; retry only failures. An ingest response carrying episodeId/episodeOpened is the cue to start the location-trail fan-out and the camera bursts; trailCadenceSeconds and snapshotPolicy are the advisory cadence for each.
          */
         post: {
             parameters: {
@@ -3100,6 +3298,12 @@ export interface paths {
                             episodeOpened?: boolean;
                             /** @description Advisory TRAIL_POINT interval while an episode is open, tuned to the owner's plan. Advice only - evidence is never refused. */
                             trailCadenceSeconds?: number;
+                            /** @description Advisory camera-burst policy for the plan. Advice on how much to capture; evidence is never refused. */
+                            snapshotPolicy?: {
+                                framesPerCamera: number;
+                                intervalSeconds: number;
+                                maxBurstsPerEpisode: number;
+                            };
                         };
                     };
                 };
@@ -3901,6 +4105,12 @@ export interface paths {
                                     historyDays: number | null;
                                     trailCadenceSeconds: number;
                                     pushAlerts: boolean;
+                                    /** @description Advisory camera-burst policy for the plan. Advice on how much to capture; evidence is never refused. */
+                                    snapshotPolicy: {
+                                        framesPerCamera: number;
+                                        intervalSeconds: number;
+                                        maxBurstsPerEpisode: number;
+                                    };
                                 };
                             };
                         };
@@ -3982,6 +4192,12 @@ export interface paths {
                                     historyDays: number | null;
                                     trailCadenceSeconds: number;
                                     pushAlerts: boolean;
+                                    /** @description Advisory camera-burst policy for the plan. Advice on how much to capture; evidence is never refused. */
+                                    snapshotPolicy: {
+                                        framesPerCamera: number;
+                                        intervalSeconds: number;
+                                        maxBurstsPerEpisode: number;
+                                    };
                                 };
                             };
                         };

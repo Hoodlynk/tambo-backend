@@ -8,7 +8,8 @@ import { AppError } from '../utils/appError';
 import { packPublicKeyBase64, signManifest } from '../utils/signing';
 import { mapsLink } from './evidenceLocation';
 import * as familiarLocationService from './familiarLocation.service';
-import { trailFromEnvelopes } from './trail.service';
+import { burstsFromEnvelopes } from './snapshot.service';
+import { LOCATION_BEARING_TYPES, trailFromEnvelopes } from './trail.service';
 import type { Movement } from './trail.service';
 
 /**
@@ -44,11 +45,42 @@ export interface PackTrailSummary {
   /** Set when a moving trail left a familiar place - the strongest theft cue. */
   leftFamiliar: { label: string; at: string } | null;
   /**
-   * Location-bearing envelope types that arrived WITHOUT a usable fix
-   * (GPS-denied, malformed coordinates). They are liveness evidence - the
-   * device reported in at those times - and stay in the signed manifest.
+   * Location-bearing envelope types (failed unlocks, trail points, snapshot
+   * frames) that arrived WITHOUT a usable fix (GPS-denied, malformed
+   * coordinates). They are liveness evidence - the device reported in at
+   * those times - and stay in the signed manifest.
    */
   pointsWithoutFix: number;
+}
+
+/**
+ * One camera burst (F4): the frames the phone took in one go, pinned to the
+ * place and moment. Where a thief was and what was around them, in order.
+ */
+export interface PackSnapshotSet {
+  burstId: string;
+  trigger: string;
+  /** Server receipt time of the first frame. */
+  receivedAt: string;
+  capturedAt: string;
+  location: {
+    lat: number;
+    lng: number;
+    accuracyM?: number;
+    mapsLink: string;
+  } | null;
+  familiar: { label: string; distanceM: number } | null;
+  cameras: { front: number; back: number; unknown: number };
+  frames: {
+    envelopeId: string;
+    seq: number | null;
+    camera: string;
+    receivedAt: string;
+    sha256: string;
+    bytes?: number;
+    /** False when the bytes never arrived; the frame is still in the manifest. */
+    hasMedia: boolean;
+  }[];
 }
 
 export interface PackManifestItem {
@@ -83,6 +115,9 @@ export interface EvidencePack {
   unlockAttempts: { capturedAt: string; receivedAt: string; detail: string }[];
   trail: PackTrailPoint[];
   trailSummary: PackTrailSummary;
+  /** Camera bursts in receipt order (F4). */
+  snapshotSets: PackSnapshotSet[];
+  /** Every PHOTO frame, flat - kept for clients built before snapshotSets. */
   photos: {
     envelopeId: string;
     receivedAt: string;
@@ -164,9 +199,10 @@ export const buildPack = async (
         .exec(),
       familiarLocationService.list(episode.user.toString()),
     ]);
-  // the trail is computed from the envelopes already in hand - the pack must
-  // not read the episode's evidence twice
+  // the trail and the snapshot sets are computed from the envelopes already
+  // in hand - the pack must not read the episode's evidence twice
   const episodeTrail = trailFromEnvelopes(envelopes, familiarPlaces);
+  const snapshots = burstsFromEnvelopes(envelopes, familiarPlaces);
 
   if (!owner || !device) {
     throw AppError.notFound(
@@ -198,9 +234,8 @@ export const buildPack = async (
     familiar: point.familiar,
   }));
 
-  const locationBearing = envelopes.filter(
-    (envelope) =>
-      envelope.type === 'UNLOCK_FAILED' || envelope.type === 'TRAIL_POINT',
+  const locationBearing = envelopes.filter((envelope) =>
+    LOCATION_BEARING_TYPES.includes(envelope.type),
   ).length;
 
   const trailSummary: PackTrailSummary = {
@@ -213,6 +248,34 @@ export const buildPack = async (
       : null,
     pointsWithoutFix: locationBearing - trail.length,
   };
+
+  const snapshotSets: PackSnapshotSet[] = snapshots.bursts.map((burst) => ({
+    burstId: burst.burstId,
+    trigger: burst.trigger,
+    receivedAt: burst.at.toISOString(),
+    capturedAt: burst.capturedAt.toISOString(),
+    location: burst.location
+      ? {
+          lat: burst.location.lat,
+          lng: burst.location.lng,
+          ...(burst.location.accuracyM !== undefined
+            ? { accuracyM: burst.location.accuracyM }
+            : {}),
+          mapsLink: burst.location.mapsLink,
+        }
+      : null,
+    familiar: burst.familiar,
+    cameras: burst.cameras,
+    frames: burst.frames.map((frame) => ({
+      envelopeId: frame.envelopeId,
+      seq: frame.seq,
+      camera: frame.camera,
+      receivedAt: frame.receivedAt.toISOString(),
+      sha256: frame.sha256,
+      ...(frame.bytes !== undefined ? { bytes: frame.bytes } : {}),
+      hasMedia: frame.hasMedia,
+    })),
+  }));
 
   const photos = envelopes
     .filter((envelope) => envelope.type === 'PHOTO')
@@ -272,6 +335,7 @@ export const buildPack = async (
     unlockAttempts,
     trail,
     trailSummary,
+    snapshotSets,
     photos,
     otherEvidence,
     actionChecklist: ACTION_CHECKLIST,

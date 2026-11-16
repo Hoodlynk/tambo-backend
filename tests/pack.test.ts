@@ -246,14 +246,26 @@ describe('GET /episodes/:id/pack', () => {
     expect(pack.trail[0]!.mapsLink).toContain('maps.google.com');
     expect(pack.trail[0]!.capturedAt).toBeTruthy();
     // the two fixes are ~1.2km apart: a moving trail; the two UNLOCK_FAILED
-    // envelopes carried no location, so they count as fixless check-ins
+    // envelopes and the photo carried no location, so they count as fixless
+    // check-ins (a photo is a location-bearing type since F4)
     expect(pack.trailSummary).toEqual({
       movement: 'moving',
       leftFamiliar: null,
-      pointsWithoutFix: 2,
+      pointsWithoutFix: 3,
     });
     expect(pack.photos).toHaveLength(1);
     expect(pack.photos[0]!.sha256).toBe(sha256Hex(TINY_JPEG));
+    // a pre-F4 photo (no burstId) reads as a set of one, so it is never lost
+    expect(pack.snapshotSets).toHaveLength(1);
+    expect(pack.snapshotSets[0]).toMatchObject({
+      trigger: 'unknown',
+      cameras: { front: 1, back: 0, unknown: 0 },
+      location: null,
+    });
+    expect(pack.snapshotSets[0]!.frames[0]).toMatchObject({
+      hasMedia: true,
+      sha256: sha256Hex(TINY_JPEG),
+    });
     expect(pack.otherEvidence).toHaveLength(1);
     expect(pack.actionChecklist.join(' ')).toContain('eCitizen');
     expect(pack.actionChecklist.join(' ')).toContain('OB');

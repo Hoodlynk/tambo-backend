@@ -31,8 +31,12 @@ export const rateLimits = {
   buddyInvite: { limit: 5, windowSeconds: 60 * 60 },
   /** Evidence batches. Keyed per device; a live trail is bursty but small. */
   evidenceIngest: { limit: 240, windowSeconds: 60 * 60 },
-  /** Photo uploads. Keyed per device. */
-  mediaUpload: { limit: 60, windowSeconds: 60 * 60 },
+  /**
+   * Photo uploads. Keyed per device. Sized for snapshot bursts (F4): a pro
+   * episode may send 20 bursts of 3 frames per camera inside an hour, and a
+   * retried frame costs a second hit.
+   */
+  mediaUpload: { limit: 300, windowSeconds: 60 * 60 },
   /** Full-pack emails fan out to several mailboxes. Keyed on IP. */
   packSend: { limit: 10, windowSeconds: 60 * 60 },
   /** Push-token registration: apps re-register on start; bots must not churn the registry. */

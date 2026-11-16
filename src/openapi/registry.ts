@@ -25,7 +25,11 @@ import {
   episodeListQuerySchema,
   markStolenSchema,
 } from '../validation/device.schema';
-import { ingestSchema, mediaParamsSchema } from '../validation/evidence.schema';
+import {
+  ingestSchema,
+  mediaParamsSchema,
+  snapshotMediaParamsSchema,
+} from '../validation/evidence.schema';
 import {
   familiarLocationIdSchema,
   familiarLocationSchema,
@@ -783,6 +787,56 @@ export const endpoints: Endpoint[] = [
   },
   {
     method: 'get',
+    path: '/api/v1/episodes/{id}/snapshots',
+    tag: 'Episodes',
+    summary:
+      'Camera snapshot bursts: frames grouped per capture, each pinned to a place',
+    description:
+      'PHOTO envelopes grouped by burstId in server-receipt order. Owner ' +
+      'only: buddies receive photos in the PDF pack, never a URL. Each frame ' +
+      'carries mediaPath for the bytes; hasMedia is false until they arrive.',
+    auth: 'bearer',
+    request: { params: episodeIdSchema },
+    responses: [
+      { status: 200, description: 'OK.', schema: r.snapshotsResponse },
+    ],
+    errors: [unauthorized, { status: 404, code: 'episode_not_found' }],
+  },
+  {
+    method: 'get',
+    path: '/api/v1/episodes/{id}/snapshots/{envelopeId}',
+    tag: 'Episodes',
+    summary: 'The bytes of one snapshot frame',
+    description:
+      'Streams the stored media with its content type; X-Content-Sha256 ' +
+      'carries the hash the integrity manifest lists. Scoped to the episode: ' +
+      'an envelope id alone never opens a photo.',
+    auth: 'bearer',
+    request: { params: snapshotMediaParamsSchema },
+    responses: [
+      {
+        status: 200,
+        description: 'The image bytes.',
+        contentType: 'image/jpeg',
+      },
+    ],
+    errors: [
+      unauthorized,
+      { status: 404, code: 'episode_not_found' },
+      {
+        status: 404,
+        code: 'snapshot_not_found',
+        description: 'No PHOTO envelope with that id in this episode.',
+      },
+      {
+        status: 404,
+        code: 'media_not_available',
+        description: 'The envelope exists but its bytes have not arrived yet.',
+      },
+    ],
+  },
+  {
+    method: 'get',
     path: '/api/v1/episodes/{id}/pack',
     tag: 'Episodes',
     summary: 'The evidence pack (JSON, Ed25519-signed manifest)',
@@ -835,7 +889,8 @@ export const endpoints: Endpoint[] = [
       'Authenticates as a DEVICE via X-Device-Token. 200 even with ' +
       'per-envelope rejections: read the ACK list; retry only failures. An ' +
       'ingest response carrying episodeId/episodeOpened is the cue to start ' +
-      'the location-trail fan-out.',
+      'the location-trail fan-out and the camera bursts; trailCadenceSeconds ' +
+      'and snapshotPolicy are the advisory cadence for each.',
     auth: 'device',
     request: {
       body: ingestSchema,

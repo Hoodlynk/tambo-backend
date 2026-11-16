@@ -204,6 +204,25 @@ Cap **8 MB**. Rate limit **60/hour per device**.
 
 ---
 
+### Snapshot bursts (F4) — the PHOTO payload shape
+
+When the phone can take pictures during an attack (device-admin
+`onPasswordFailed` → a short camera foreground service, which on Android 11+
+needs the owner-granted "Display over other apps" permission; see
+[f4-snapshots-scoping.md](f4-snapshots-scoping.md)), send each frame as its
+own `PHOTO` envelope whose payload names the burst:
+
+```json
+{ "burstId": "<one uuid per capture>", "seq": 0, "count": 3, "camera": "front",
+  "trigger": "failed_unlock", "location": { "lat": -1.2921, "lng": 36.8219, "accuracyM": 12 },
+  "headingDeg": 240 }
+```
+
+Then upload the bytes as in section 3. The ingest response's `snapshotPolicy`
+(`framesPerCamera`, `intervalSeconds`, `maxBurstsPerEpisode`) is the cadence
+to adopt while an episode is open; it is advice, never a gate. Full contract in
+[evidence-api.md](evidence-api.md#camera-snapshot-bursts-f4).
+
 ## 4. What the server does after the threshold (so you know what NOT to build)
 
 You report; the **server** decides and acts. On an `UNLOCK_FAILED` stream

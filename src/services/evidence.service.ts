@@ -9,9 +9,11 @@ import User from '../models/user.model';
 import { isDuplicateKeyError } from '../utils/mongoErrors';
 import { sha256Hex } from '../utils/tokens';
 import { entitlementsFor } from './entitlements';
+import type { SnapshotPolicy } from './entitlements';
 import * as episodeService from './episode.service';
 import { parseLocation } from './evidenceLocation';
 import type { EvidenceLocation } from './evidenceLocation';
+import { parseSnapshot } from './evidenceSnapshot';
 import { extendMediaExpiry, saveMedia } from './storage/media.storage';
 import type { EnvelopeInput } from '../validation/evidence.schema';
 
@@ -41,7 +43,32 @@ export interface IngestResult {
    * owner's plan. Advice, not enforcement - evidence is never refused.
    */
   trailCadenceSeconds?: number;
+  /**
+   * Advisory camera-burst policy while an episode is open (F4), tuned to the
+   * owner's plan. Advice on how much to capture; evidence is never refused.
+   */
+  snapshotPolicy?: SnapshotPolicy;
 }
+
+/**
+ * The burst columns a PHOTO envelope carries (F4). Read from the payload at
+ * ingest so the read model never has to re-parse; a payload without them is
+ * a legacy single photo and gets no columns at all.
+ */
+const snapshotColumns = (
+  input: EnvelopeInput,
+): Partial<
+  Pick<IEvidenceEnvelope, 'burstId' | 'camera' | 'trigger' | 'seq'>
+> => {
+  if (input.type !== 'PHOTO') return {};
+  const meta = parseSnapshot(input.payload);
+  return {
+    ...(meta.burstId ? { burstId: meta.burstId } : {}),
+    camera: meta.camera,
+    trigger: meta.trigger,
+    ...(meta.seq !== null ? { seq: meta.seq } : {}),
+  };
+};
 
 const routineExpiry = (): Date =>
   new Date(
@@ -139,6 +166,7 @@ export const ingestBatch = async (
         receivedAt: new Date(),
         payload: input.payload,
         sha256: input.sha256.toLowerCase(),
+        ...snapshotColumns(input),
         expiresAt: openEpisode ? episodeExpiry() : routineExpiry(),
       });
 
@@ -172,17 +200,22 @@ export const ingestBatch = async (
 
   // plan-tuned ADVISORY only ("how often should I ping?"): entitlements shape
   // the client's cadence, never whether evidence is accepted
-  const cadence = openEpisode
-    ? ((await User.findById(device.user).then((owner) =>
-        owner ? entitlementsFor(owner).trailCadenceSeconds : null,
-      )) ?? undefined)
-    : undefined;
+  const advice = openEpisode
+    ? await User.findById(device.user)
+        .select('plan planExpiresAt')
+        .then((owner) => (owner ? entitlementsFor(owner) : null))
+    : null;
 
   return {
     results,
     ...(openEpisode ? { episodeId: openEpisode._id.toString() } : {}),
     ...(episodeOpened ? { episodeOpened: true } : {}),
-    ...(cadence !== undefined ? { trailCadenceSeconds: cadence } : {}),
+    ...(advice
+      ? {
+          trailCadenceSeconds: advice.trailCadenceSeconds,
+          snapshotPolicy: advice.snapshotPolicy,
+        }
+      : {}),
   };
 };
 

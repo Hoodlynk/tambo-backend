@@ -8,6 +8,7 @@ import {
   episodeIdSchema,
   episodeListQuerySchema,
 } from '../../validation/device.schema';
+import { snapshotMediaParamsSchema } from '../../validation/evidence.schema';
 import { asyncHandler } from '../../utils/asyncHandler';
 
 const router = Router();
@@ -30,6 +31,19 @@ router.get(
   '/:id/trail',
   validate({ params: episodeIdSchema }),
   asyncHandler(episodeController.trail),
+);
+
+// camera snapshot bursts (F4): grouped frames, and the bytes of one frame.
+// Owner-only on purpose: buddies get photos in the PDF pack, never a URL.
+router.get(
+  '/:id/snapshots',
+  validate({ params: episodeIdSchema }),
+  asyncHandler(episodeController.snapshots),
+);
+router.get(
+  '/:id/snapshots/:envelopeId',
+  validate({ params: snapshotMediaParamsSchema }),
+  asyncHandler(episodeController.snapshotMedia),
 );
 
 // --- The evidence pack (F-C): the dossier this product exists to produce ----

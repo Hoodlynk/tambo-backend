@@ -21,8 +21,11 @@ Tests: [`tests/trail.test.ts`](../tests/trail.test.ts).
 ## 1. The trail — `GET /api/v1/episodes/:id/trail` (Bearer JWT, owner)
 
 Assembled server-side from the episode's location-bearing envelopes
-(`TRAIL_POINT` **and** `UNLOCK_FAILED`), ordered by server receipt time.
-Envelopes without a usable fix are skipped, never an error.
+(`TRAIL_POINT`, `UNLOCK_FAILED` **and**, since F4, `PHOTO` snapshot frames
+that carried a location), ordered by server receipt time. Envelopes without a
+usable fix are skipped, never an error. `source` names which type carried the
+fix, so a client can draw a camera marker where a burst was taken
+([evidence-api.md](evidence-api.md#camera-snapshot-bursts-f4)).
 
 ```json
 {
