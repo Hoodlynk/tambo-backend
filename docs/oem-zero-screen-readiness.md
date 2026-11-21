@@ -31,8 +31,9 @@ can prepare now from what only the owner can obtain.
    intruder photos and the partner webhooks.
 4. **DPIA and ODPC registration** covering intruder photos (third-party
    data), location trails and partner data sharing.
-5. **Hosting region** (still open since 2026-09; it blocks the DPIA
-   cross-border section).
+5. **Hosting region.** Owner, 2026-11-21: the hosting region, the DPIA and
+   the ODPC registration (item 4) are in place. The manufacturer agreement
+   (item 3) is still per partner.
 6. A **first design partner** to build the card against, even a small one.
 
 ## Readiness checklist (tick as each lands)

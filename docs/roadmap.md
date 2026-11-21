@@ -1,13 +1,15 @@
 # Build plan & status
 
 The single source of truth for where the backend is and what comes next.
-Last updated: 2026-11-16.
+Last updated: 2026-11-21.
 
 **Active program (approved 2026-11-13)**: [program-2026-11.md](program-2026-11.md),
 backend sessions B1 snapshots (✅) → B2 remote commands (✅) → B3 partner tenancy +
 white-label config + launch handshake (✅) → B4 OEM provisioning and device-first
-enrolment (✅) → B5 partner webhooks + status cards (✅). **Next: the app repo restructure
-for iOS (M0-M6, run in that repo).** Scoping records:
+enrolment (✅) → B5 partner webhooks + status cards (✅). **Next: the revised run order of
+2026-11-21 in [program-2026-11.md](program-2026-11.md)** (the app repo is renamed
+`tambo-mobile-app` and pushed; next is deploying `main` to production, then M3a; iOS after the Android release; from
+this repo it needs the deploy unit and account deletion). Scoping records:
 [oem-zero-screen-readiness.md](oem-zero-screen-readiness.md),
 [white-label-scoping.md](white-label-scoping.md).
 
