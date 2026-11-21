@@ -35,7 +35,9 @@ the app update is the minimum version (deploy.md section 1); move the sweep,
 watchdog and webhook timers to a single-runner job before running two instances;
 the app's `LoginScreen` must branch on a `challenge` in the 200 body (app repo);
 drop the pre-push `packDelivery` index `{episode, recipient, kind}` after the first
-deploy (`packDelivery.model.ts` note); confirm which versionCode is live on Play.
+deploy (`packDelivery.model.ts` note); the Play listing's description says reports reach the owner by email **and
+WhatsApp**, but WhatsApp is deferred and no sender exists, so the listing text
+or the product must change before a wider rollout (owner).
 
 ### ✅ Merged from the remote: quiet-device watchdog and buddy reports (2026-11-16)
 Kevin's two commits (2026-09-12, 2026-09-24) are merged into the B1-B5 line.

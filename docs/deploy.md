@@ -26,11 +26,15 @@ Everything else the build calls (register, OTP verify and resend, refresh, me,
 sessions, logout, forgot and change password, buddies, buddy invites, protecting,
 report-stolen, device token revoke, evidence ingest and heartbeat) matches.
 
-**Not verified:** which build is live on Play. The repo has versionCode 7 at its
-latest; the Play Console value was not available. If a build older than 5 is
-live, replay its calls too. The replay runs against an in-memory database, not
-production data, so step 6 repeats the unverified-login case against the real
-deployment.
+**Which build is live** (owner's screenshots of the Play listing on a Samsung
+SM-A145F, 2026-11-21): version 1.0, updated 24 Sept 2026, "Alerts
+implementations and Notifications", 10+ downloads, Android 7.0 and up. That
+date is the day of Kevin's `2d8b7d0` ("failed auto-detection improvements with
+alerts integration", versionCode 7), the commit the replay used. The listing
+does not show the versionCode, so this is a match on date and release note, not
+proof; it rules out an older build being the current one. The replay runs
+against an in-memory database, not production data, so step 6 repeats the
+unverified-login case against the real deployment.
 
 ### Retiring the exemptions
 
