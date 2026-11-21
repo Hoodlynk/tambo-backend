@@ -24,6 +24,7 @@ const ENV_KEYS = [
   'CLIENT_RECOMMENDED_VERSION_ANDROID',
   'CLAIM_INTEGRITY',
   'WEBHOOK_ALLOW_LOCAL_TARGETS',
+  'LEGACY_CLIENT_LEGAL_EXEMPT',
 ] as const;
 
 const originalEnv: Record<string, string | undefined> = {};
@@ -294,5 +295,26 @@ describe('WEBHOOK_ALLOW_LOCAL_TARGETS', () => {
     process.env.CLAIM_INTEGRITY = '';
     process.env.WEBHOOK_ALLOW_LOCAL_TARGETS = 'true';
     expect(loadConfig).toThrow(/allowed only in development and test/);
+  });
+});
+
+describe('LEGACY_CLIENT_LEGAL_EXEMPT', () => {
+  it('defaults to on, so live installs keep enrolling', () => {
+    process.env.LEGACY_CLIENT_LEGAL_EXEMPT = '';
+    const config = loadConfig() as { legacyClients: { legalExempt: boolean } };
+    expect(config.legacyClients.legalExempt).toBe(true);
+  });
+
+  it('turns off with false', () => {
+    process.env.LEGACY_CLIENT_LEGAL_EXEMPT = 'false';
+    const config = loadConfig() as { legacyClients: { legalExempt: boolean } };
+    expect(config.legacyClients.legalExempt).toBe(false);
+  });
+
+  it('refuses to boot on anything but true or false', () => {
+    process.env.LEGACY_CLIENT_LEGAL_EXEMPT = 'off';
+    expect(loadConfig).toThrow(
+      /LEGACY_CLIENT_LEGAL_EXEMPT must be true or false/,
+    );
   });
 });

@@ -57,5 +57,6 @@ reference for your feature.
 
 | Doc | Covers |
 |---|---|
+| [deploy.md](deploy.md) | Dockerfile, environment, live-install compatibility, smoke test |
 | [cloudflare.md](cloudflare.md) | DNS, Resend records, proxying, TRUST_PROXY |
 | [otp-mail-runbook.md](otp-mail-runbook.md) | Diagnosing OTP/email delivery |

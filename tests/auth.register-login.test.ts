@@ -170,7 +170,12 @@ describe('POST /api/auth/login', () => {
   it('returns a login challenge - not a session - when the mailbox was never proven', async () => {
     await startRegister(); // registered, signup code never entered
 
-    const res = await startLogin();
+    // a current client says so; header-less builds get the 403 shape
+    // (legacyClient.test.ts)
+    const res = await request(testServer())
+      .post('/api/auth/login')
+      .set('X-Client-Platform', 'android')
+      .send({ email: CREDENTIALS.email, password: CREDENTIALS.password });
     expect(res.status).toBe(200);
     expect(res.body.challenge).toMatchObject({ purpose: 'login' });
     expect(res.body.tokens).toBeUndefined();

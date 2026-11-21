@@ -181,6 +181,15 @@ interface Config {
     /** Per-attempt timeout for the partner's endpoint. */
     timeoutMs: number;
   };
+  legacyClients: {
+    /**
+     * Lets builds that send no X-Client-Platform enrol without a recorded
+     * legal acceptance (the Play build keeps its terms sheet on the phone
+     * only). Switch off once the update that calls /legal/accept is the
+     * minimum version.
+     */
+    legalExempt: boolean;
+  };
 }
 
 /**
@@ -404,6 +413,17 @@ const parseWebhookLocalTargets = (): boolean => {
   return raw === 'true';
 };
 
+/** Strict true|false: a typo must not silently pick a legal posture. */
+const parseLegacyLegalExempt = (): boolean => {
+  const raw = process.env.LEGACY_CLIENT_LEGAL_EXEMPT || 'true';
+  if (raw !== 'true' && raw !== 'false') {
+    throw new Error(
+      `LEGACY_CLIENT_LEGAL_EXEMPT must be true or false; got "${raw}".`,
+    );
+  }
+  return raw === 'true';
+};
+
 const config: Config = {
   port: Number(process.env.PORT) || 3000,
   nodeEnv: rawNodeEnv || 'development',
@@ -509,6 +529,7 @@ const config: Config = {
     allowLocalTargets: parseWebhookLocalTargets(),
     timeoutMs: positiveInt('WEBHOOK_TIMEOUT_MS', 10_000),
   },
+  legacyClients: { legalExempt: parseLegacyLegalExempt() },
 };
 
 export default config;

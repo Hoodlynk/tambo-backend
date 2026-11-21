@@ -1,17 +1,41 @@
 # Build plan & status
 
 The single source of truth for where the backend is and what comes next.
-Last updated: 2026-11-21.
+Last updated: 2026-11-21 (deploy unit).
 
 **Active program (approved 2026-11-13)**: [program-2026-11.md](program-2026-11.md),
 backend sessions B1 snapshots (✅) → B2 remote commands (✅) → B3 partner tenancy +
 white-label config + launch handshake (✅) → B4 OEM provisioning and device-first
 enrolment (✅) → B5 partner webhooks + status cards (✅). **Next: the revised run order of
 2026-11-21 in [program-2026-11.md](program-2026-11.md)** (the app repo is renamed
-`tambo-mobile-app` and pushed; next is deploying `main` to production, then M3a; iOS after the Android release; from
-this repo it needs the deploy unit and account deletion). Scoping records:
+`tambo-mobile-app` and pushed; the deploy unit is built (below), so the owner deploys per
+[deploy.md](deploy.md), then M3a; iOS after the Android release; from this repo it
+still needs account deletion). Scoping records:
 [oem-zero-screen-readiness.md](oem-zero-screen-readiness.md),
 [white-label-scoping.md](white-label-scoping.md).
+
+### ✅ Deploy unit: image, runbook, live-install compatibility (2026-11-21)
+Checked the build live on Play (Kevin's `2d8b7d0`, no `X-Client-*` headers) against
+`main` first, by replaying its calls ([tests/legacyClient.test.ts](../tests/legacyClient.test.ts)).
+Two breaks found and closed for header-less builds only:
+- **Unverified-mailbox login:** the build reads `403 email_unverified` + `challenge`;
+  `main` answered `200 { challenge }`, which the build shows as "Could not sign you
+  in". Header-less callers get the 403 shape; current clients keep the documented 200.
+- **Device enrolment:** `main` gates it on server-side legal acceptance, which the
+  build never records, so new and re-enrolling installs would silently send no
+  evidence. Owner chose (2026-11-21) to exempt header-less builds behind
+  `LEGACY_CLIENT_LEGAL_EXEMPT` (default `true`), logging each exempt enrolment.
+Also: [Dockerfile](../Dockerfile) and `.dockerignore`, SIGTERM drain in
+`server.ts`, [deploy.md](deploy.md) (environment, snapshot, smoke test, rollback).
+The image was not built here (no Docker); the production-mode `dist/` boot and a
+clean SIGTERM exit were. **Done when** the owner has deployed and the smoke test passes.
+
+**Open, filed here instead of TODOs:** retire both legacy shapes and the flag once
+the app update is the minimum version (deploy.md section 1); move the sweep,
+watchdog and webhook timers to a single-runner job before running two instances;
+the app's `LoginScreen` must branch on a `challenge` in the 200 body (app repo);
+drop the pre-push `packDelivery` index `{episode, recipient, kind}` after the first
+deploy (`packDelivery.model.ts` note); confirm which versionCode is live on Play.
 
 ### ✅ Merged from the remote: quiet-device watchdog and buddy reports (2026-11-16)
 Kevin's two commits (2026-09-12, 2026-09-24) are merged into the B1-B5 line.

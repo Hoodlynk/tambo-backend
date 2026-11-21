@@ -5,7 +5,10 @@ import * as provisioningController from '../../controllers/provisioning.controll
 import * as statusCardController from '../../controllers/statusCard.controller';
 import { authContext, requireAuth } from '../../middlewares/auth.middleware';
 import { requireDeviceToken } from '../../middlewares/deviceAuth.middleware';
-import { requireLegalAcceptance } from '../../middlewares/legalGate.middleware';
+import {
+  requireLegalAcceptance,
+  requireLegalAcceptanceForEnrolment,
+} from '../../middlewares/legalGate.middleware';
 import { rateLimit } from '../../middlewares/rateLimit';
 import { validate } from '../../middlewares/validate';
 import {
@@ -40,7 +43,7 @@ router.use(requireAuth);
 // a version bump must never brick an already-protected phone mid-theft.
 router.post(
   '/',
-  requireLegalAcceptance,
+  requireLegalAcceptanceForEnrolment,
   validate({ body: deviceSchema }),
   asyncHandler(deviceController.register),
 );

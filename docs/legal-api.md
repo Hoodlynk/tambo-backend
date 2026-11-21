@@ -78,6 +78,16 @@ Acceptance is not only recorded — **device enrolment is gated on it**:
 until the user has accepted the **current** version of **both** documents.
 So the app must complete both accepts before offering enrolment.
 
+**Exception (owner decision 2026-11-21):** builds that send no
+`X-Client-Platform` header are exempt from this gate while
+`LEGACY_CLIENT_LEGAL_EXEMPT=true` (the default). The build on Google Play shows
+its own terms sheet and stores the answer on the phone, but never calls
+`/legal/accept`, so strict gating would stop every new or re-enrolling install
+from sending evidence. Each exempt enrolment is logged. Any client that sends the
+header is fully gated. The exemption is switched off, and this paragraph
+deleted, once the update that records acceptance is the minimum version
+([deploy.md](deploy.md)).
+
 The gate deliberately covers only the action that *starts* data collection.
 Managing an existing device (list, activity, mark-stolen, token rotation) is
 never gated — a T&C version bump must re-prompt users, not brick an

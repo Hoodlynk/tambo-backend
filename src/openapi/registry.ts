@@ -250,6 +250,14 @@ export const endpoints: Endpoint[] = [
           'Same code for wrong password AND unknown email, by design.',
       },
       {
+        status: 403,
+        code: 'email_unverified',
+        description:
+          'Legacy answer for builds that send no X-Client-Platform header: ' +
+          'the unproven-mailbox case as an error, with the login challenge ' +
+          'in `challenge`. Clients that send the header get the 200 shape.',
+      },
+      {
         status: 423,
         code: 'account_locked',
         description:
@@ -674,7 +682,9 @@ export const endpoints: Endpoint[] = [
         status: 403,
         code: 'legal_acceptance_required',
         description:
-          'Accept the current terms + privacy first (see /api/v1/legal).',
+          'Accept the current terms + privacy first (see /api/v1/legal). ' +
+          'Builds that send no X-Client-Platform are exempt while ' +
+          'LEGACY_CLIENT_LEGAL_EXEMPT is on.',
       },
       {
         status: 409,

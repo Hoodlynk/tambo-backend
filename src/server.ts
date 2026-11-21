@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import app from './app';
 import config from './config/config';
 import connectDB from './config/database';
@@ -8,7 +9,7 @@ import { sweepQuietDevices } from './services/watchdog.service';
 
 connectDB()
   .then(() => {
-    app.listen(config.port, () => {
+    const server = app.listen(config.port, () => {
       logger.info({ port: config.port }, 'server listening');
       // OTP codes, alerts and packs all ride on this - a wrong driver here is
       // exactly the "OTP is down but nothing errors" incident. Say it at boot.
@@ -19,6 +20,20 @@ connectDB()
             : ''),
       );
     });
+
+    // Container hosts stop the old instance with SIGTERM on every deploy and
+    // kill it after a grace period: finish in-flight uploads (a phone mid-theft
+    // is sending evidence) instead of cutting them, then close the database.
+    const shutdown = (signal: string): void => {
+      logger.info({ signal }, 'shutting down');
+      const forced = setTimeout(() => process.exit(1), 10_000);
+      forced.unref();
+      server.close(() => {
+        mongoose.disconnect().finally(() => process.exit(0));
+      });
+    };
+    process.once('SIGTERM', () => shutdown('SIGTERM'));
+    process.once('SIGINT', () => shutdown('SIGINT'));
 
     // Retention: Mongo's TTL index deletes envelope DOCUMENTS, but cannot
     // cascade into GridFS - this sweep is the media half of the retention job.

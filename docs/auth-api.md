@@ -108,9 +108,21 @@ the same call returns a `login` challenge instead — completing it heals
 { "challenge": { "challengeId": "665f...", "purpose": "login", "expiresInMinutes": 10 } }
 ```
 
+**Builds that send no `X-Client-Platform` header** (the app published on Play
+before the headers existed) get the unverified case as an error instead, which
+is the shape they were built against, and it carries the same challenge:
+
+```json
+403 { "code": "email_unverified", "message": "...", "challenge": { "challengeId": "665f...", "purpose": "login", "expiresInMinutes": 10 } }
+```
+
+New clients should send `X-Client-Platform` and branch on the body. See
+[deploy.md](deploy.md) for when this shape goes away.
+
 | Code | Status | Meaning |
 |---|---|---|
 | `invalid_credentials` | 401 | Wrong password **or** unknown email — deliberately indistinguishable |
+| `email_unverified` | 403 | Legacy answer for header-less builds only, see above |
 | `account_locked` | 423 | Too many consecutive failed logins; retry after `retryAfter` seconds, or reset the password (clears the lock) |
 | `rate_limited` | 429 | 5 per 15 min per email+IP |
 

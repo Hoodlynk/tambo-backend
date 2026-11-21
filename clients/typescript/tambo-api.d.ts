@@ -239,6 +239,15 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
+                /** @description `email_unverified` — Legacy answer for builds that send no X-Client-Platform header: the unproven-mailbox case as an error, with the login challenge in `challenge`. Clients that send the header get the 200 shape. */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
                 /** @description `account_locked` — Too many consecutive failed logins; retry after retryAfter seconds, or reset the password (which clears the lock). */
                 423: {
                     headers: {
@@ -1999,7 +2008,7 @@ export interface paths {
                         "application/json": components["schemas"]["Error"];
                     };
                 };
-                /** @description `legal_acceptance_required` — Accept the current terms + privacy first (see /api/v1/legal). */
+                /** @description `legal_acceptance_required` — Accept the current terms + privacy first (see /api/v1/legal). Builds that send no X-Client-Platform are exempt while LEGACY_CLIENT_LEGAL_EXEMPT is on. */
                 403: {
                     headers: {
                         [name: string]: unknown;

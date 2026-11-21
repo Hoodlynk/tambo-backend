@@ -69,9 +69,24 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     req.ip,
     req.client,
   );
-  // a challenge means the mailbox was never proven - verify completes login
-  if (isChallenge(result)) sendChallenge(res, result);
-  else sendAuthResult(res, result);
+  if (!isChallenge(result)) {
+    sendAuthResult(res, result);
+    return;
+  }
+  // The builds published before the client headers existed (no
+  // X-Client-Platform) read an unproven mailbox as `403 email_unverified`
+  // carrying the challenge, and show "could not sign you in" for the 200
+  // shape. Live installs outlive any deploy, so they keep the answer they
+  // were built against; every current client branches on the body.
+  if (!req.client?.platform) {
+    res.status(403).json({
+      code: 'email_unverified',
+      message: 'Verify your email address to finish signing up.',
+      challenge: result,
+    });
+    return;
+  }
+  sendChallenge(res, result);
 };
 
 export const changePassword = async (

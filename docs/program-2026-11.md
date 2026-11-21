@@ -99,7 +99,7 @@ and account deletion move up.
 | # | Step | Model / effort | Notes |
 |---|---|---|---|
 | 1 | ~~Push the app repo~~ | none | **Done 2026-11-21**: renamed, M0 to M2 plus the artwork pushed to the organisation repo. Kevin's remote was not pushed to |
-| 2 | Deploy `main`: Dockerfile, hosting config, runbook | Sonnet 5.5 / high | **Check the published build against `main` first.** Kevin's login handles `403 email_unverified`, which `main` does not send (see the roadmap's merge note); live installs must keep working |
+| 2 | Deploy `main`: Dockerfile, hosting config, runbook | Sonnet 5.5 / high | **Built 2026-11-21, the owner runs the deploy** ([deploy.md](deploy.md)). The published-build check found two breaks (unverified login shape, legal gate on enrolment) and closed them for header-less builds; see the roadmap entry. Image not yet built with Docker |
 | 3 | M3a evidence queue, heartbeat, `installId`, boot events | Opus 5.5 / high | Baton in `../tambo-mobile-app/docs/NEXT-SESSION.md` |
 | 4 | Snapshot hardware spike, Samsung, go / no-go | Fable 5.2 / high | Fixes the permission list for the Play declaration; the capture build follows release |
 | 5 | Core journey in the app: push registration, stolen state, trail, pack viewer | Sonnet 5.5 / high | Done when a theft drill on a real phone against production ends in the signed PDF. Push waits on Firebase |

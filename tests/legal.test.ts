@@ -147,6 +147,8 @@ describe('legal gate on device enrolment', () => {
     request(testServer())
       .post('/api/v1/devices')
       .set('Authorization', `Bearer ${accessToken}`)
+      // a current client; header-less builds are exempt (legacyClient.test.ts)
+      .set('X-Client-Platform', 'android')
       .send({
         name: 'My Tecno',
         imeis: ['356938035643809'],
